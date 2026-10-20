@@ -166,14 +166,16 @@ export const OverviewPage: React.FC = () => {
   }, [transactions, activeMonth, timeScope]);
 
   // Financial aggregates
-  const { totalExpense, totalIncome, netSavings, savingsRate, expensesList } = useMemo(() => {
+  const { totalExpense, totalIncome, totalUnwanted, netSavings, savingsRate, expensesList } = useMemo(() => {
     let exp = 0;
     let inc = 0;
+    let unw = 0;
     const expList: typeof transactions = [];
 
     for (const t of scopedTransactions) {
       if (t.type === "expense") {
         exp += t.amount;
+        if (t.isUnwanted) unw += t.amount;
         expList.push(t);
       } else {
         inc += t.amount;
@@ -186,6 +188,7 @@ export const OverviewPage: React.FC = () => {
     return {
       totalExpense: exp,
       totalIncome: inc,
+      totalUnwanted: unw,
       netSavings: savings,
       savingsRate: rate,
       expensesList: expList,
@@ -258,12 +261,16 @@ export const OverviewPage: React.FC = () => {
     const totalDaysSpan = Math.round((endDt.getTime() - startDt.getTime()) / (1000 * 60 * 60 * 24));
 
     if (timeScope !== "all" || totalDaysSpan <= 90) {
-      const map = new Map<string, { spending: number; earning: number }>();
+      const map = new Map<string, { spending: number; earning: number; unwanted: number }>();
       for (const t of scopedTransactions) {
         if (!t.date) continue;
-        const cur = map.get(t.date) || { spending: 0, earning: 0 };
-        if (t.type === "expense") cur.spending += t.amount;
-        else if (t.type === "income") cur.earning += t.amount;
+        const cur = map.get(t.date) || { spending: 0, earning: 0, unwanted: 0 };
+        if (t.type === "expense") {
+          cur.spending += t.amount;
+          if (t.isUnwanted) cur.unwanted += t.amount;
+        } else if (t.type === "income") {
+          cur.earning += t.amount;
+        }
         map.set(t.date, cur);
       }
 
@@ -278,7 +285,7 @@ export const OverviewPage: React.FC = () => {
         const dyStr = String(iter.getDate()).padStart(2, "0");
         const dateKey = `${yr}-${moStr}-${dyStr}`;
         const dayNum = iter.getDate();
-        const rec = map.get(dateKey) || { spending: 0, earning: 0 };
+        const rec = map.get(dateKey) || { spending: 0, earning: 0, unwanted: 0 };
 
         const monthName = iter.toLocaleDateString("en-US", { month: "short" });
         const label = timeScope === "last3" ? `${dayNum} ${monthName}` : String(dayNum);
@@ -291,6 +298,7 @@ export const OverviewPage: React.FC = () => {
           fullLabel,
           spending: rec.spending,
           earning: rec.earning,
+          unwanted: rec.unwanted,
           net: rec.earning - rec.spending,
         });
 
@@ -301,13 +309,17 @@ export const OverviewPage: React.FC = () => {
     }
 
     // Multi-month aggregation for All Time
-    const monthMap = new Map<string, { spending: number; earning: number }>();
+    const monthMap = new Map<string, { spending: number; earning: number; unwanted: number }>();
     for (const t of scopedTransactions) {
       if (!t.date) continue;
       const monthKey = t.date.slice(0, 7);
-      const cur = monthMap.get(monthKey) || { spending: 0, earning: 0 };
-      if (t.type === "expense") cur.spending += t.amount;
-      else if (t.type === "income") cur.earning += t.amount;
+      const cur = monthMap.get(monthKey) || { spending: 0, earning: 0, unwanted: 0 };
+      if (t.type === "expense") {
+        cur.spending += t.amount;
+        if (t.isUnwanted) cur.unwanted += t.amount;
+      } else if (t.type === "income") {
+        cur.earning += t.amount;
+      }
       monthMap.set(monthKey, cur);
     }
 
@@ -322,7 +334,7 @@ export const OverviewPage: React.FC = () => {
       const yr = curIter.getFullYear();
       const moStr = String(curIter.getMonth() + 1).padStart(2, "0");
       const monthKey = `${yr}-${moStr}`;
-      const rec = monthMap.get(monthKey) || { spending: 0, earning: 0 };
+      const rec = monthMap.get(monthKey) || { spending: 0, earning: 0, unwanted: 0 };
 
       const moShort = curIter.toLocaleDateString("en-US", { month: "short" });
       const yrShort = String(yr).slice(-2);
@@ -336,6 +348,7 @@ export const OverviewPage: React.FC = () => {
         fullLabel,
         spending: rec.spending,
         earning: rec.earning,
+        unwanted: rec.unwanted,
         net: rec.earning - rec.spending,
         isMonthly: true,
       });
@@ -705,15 +718,6 @@ export const OverviewPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Action Button */}
-          <button
-            type="button"
-            onClick={() => openAddModal("expense")}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold transition active:scale-95 shadow-md shadow-emerald-950/20 cursor-pointer self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>New Transaction</span>
-          </button>
         </div>
 
         {/* 4 Financial Key Metrics Grid */}
@@ -806,14 +810,18 @@ export const OverviewPage: React.FC = () => {
         />
       </div>
 
-      {/* 4. Cash Flow Trend Chart */}
+      {/* 4. Cash Flow Trend & Payment Methods Chart */}
       <CashFlowTrendChart
         cashFlowTrendData={cashFlowTrendData}
         totalExpense={totalExpense}
         totalIncome={totalIncome}
+        totalUnwanted={totalUnwanted}
         timeScope={timeScope}
         xAxisTicks={xAxisTicks}
         settings={settings}
+        transactions={scopedTransactions}
+        categories={categories}
+        activeMonth={activeMonth}
       />
 
       {/* 5. Expense Comparison & Peak Spend Days Ranking */}

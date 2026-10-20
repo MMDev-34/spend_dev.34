@@ -3,6 +3,8 @@ import { Transaction } from "@/types/transaction";
 import { Category } from "@/types/category";
 import { Settings } from "@/types/settings";
 import { formatMoney } from "@/utils/currency";
+import { useAppStore } from "@/stores/appStore";
+import { useUIStore } from "@/stores/uiStore";
 import { 
   X, 
   Edit2, 
@@ -170,6 +172,33 @@ export const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = (
               <span className="font-semibold text-[#F5F5F5] capitalize">
                 {transaction.paymentMethod}
               </span>
+            </div>
+          )}
+
+          {/* Unwanted / Impulse Spend Toggle Row (Expenses only) */}
+          {isExpense && (
+            <div className="flex items-center justify-between pt-2.5">
+              <span className="text-[#71717A] flex items-center gap-1.5 font-medium">
+                <AlertTriangle className={`w-3.5 h-3.5 ${transaction.isUnwanted ? "text-amber-400" : "text-[#71717A]"}`} />
+                <span>Unwanted Spend</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !transaction.isUnwanted;
+                  useAppStore.getState().updateTransaction(transaction.id, { isUnwanted: nextVal });
+                  useUIStore.getState().showToast(nextVal ? "Tagged as unwanted spend" : "Removed unwanted tag");
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5 ${
+                  transaction.isUnwanted
+                    ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                    : "bg-[#1C1C1C] text-[#71717A] border-[#2E2E2E] hover:text-white"
+                }`}
+                title="Click to toggle unwanted spend"
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${transaction.isUnwanted ? "bg-amber-400" : "bg-neutral-600"}`} />
+                <span>{transaction.isUnwanted ? "Tagged Unwanted" : "Mark as Unwanted"}</span>
+              </button>
             </div>
           )}
         </div>

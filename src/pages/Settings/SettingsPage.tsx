@@ -198,6 +198,9 @@ export const SettingsPage: React.FC = () => {
         <ChevronRight className="w-5 h-5 text-[#71717A] group-hover:text-[#F5F5F5] group-hover:translate-x-0.5 transition shrink-0" />
       </div>
 
+
+
+
       {/* Quick Navigation Cards: Profile & Account Settings (Matching Reference Screen 4 items) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button
@@ -241,87 +244,7 @@ export const SettingsPage: React.FC = () => {
         </button>
       </div>
 
-      {/* 1. Account & Cloud Sync Card */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between px-1">
-          <h2 className="text-[11px] font-semibold text-[#A1A1AA] uppercase tracking-wider font-sans">
-            Account & Cloud Sync
-          </h2>
-          <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
-            user 
-              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" 
-              : "bg-amber-500/10 text-amber-400 border-amber-500/30"
-          }`}>
-            {user ? "Cloud Active" : "Local Mode"}
-          </span>
-        </div>
 
-        <div className="rounded-2xl bg-[#141414] border border-[#262626] p-4 sm:p-5 shadow-sm">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5 min-w-0">
-              {user?.photoURL ? (
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName || "User"}
-                  className="w-12 h-12 rounded-2xl object-cover border border-emerald-500/40 shadow-sm shrink-0"
-                />
-              ) : (
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-black font-extrabold text-lg shrink-0 shadow-sm">
-                  {user ? (user.displayName || user.email || "U").charAt(0).toUpperCase() : <Cloud className="w-6 h-6 text-black" />}
-                </div>
-              )}
-
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-sm text-[#F5F5F5] truncate">
-                    {user ? user.displayName || "Google Account" : "Guest Account (Offline)"}
-                  </h3>
-                </div>
-                <p className="text-xs text-[#71717A] truncate mt-0.5">
-                  {user ? user.email : "Data stored privately on this device. Sign in to sync across devices."}
-                </p>
-                {user && (
-                  <p className="text-[11px] text-emerald-400/90 font-medium mt-1 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                    <span>{cloudSyncStatus === "syncing" ? "Syncing..." : "Real-time sync active"}</span>
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-              {!user ? (
-                <button
-                  onClick={() => navigate("/auth")}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition active:scale-95 shadow-md shadow-emerald-950/30 cursor-pointer"
-                >
-                  <LogIn className="w-4 h-4 stroke-[2.5]" />
-                  <span>Sign In with Google</span>
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <button
-                    onClick={handleManualCloudSync}
-                    disabled={isManualSyncing}
-                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#1C1C1C] hover:bg-neutral-800 text-xs font-semibold text-[#F5F5F5] border border-[#2D2D2D] transition active:scale-95 disabled:opacity-50 cursor-pointer"
-                    title="Force cloud sync"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isManualSyncing ? "animate-spin" : ""}`} />
-                    <span>Sync Now</span>
-                  </button>
-                  <button
-                    onClick={() => signOut()}
-                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold text-rose-400 border border-rose-500/20 transition active:scale-95 cursor-pointer"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* 2. Regional & Display Preferences Card */}
       <section className="space-y-2.5">

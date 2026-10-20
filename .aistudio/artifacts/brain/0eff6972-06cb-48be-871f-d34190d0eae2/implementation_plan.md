@@ -1,106 +1,78 @@
-# Remove Future Payments & Add Calendar Month Bills Section
+# Cash Flow Trend - Unwanted Amount on Toggle & 50/50 Spent/Earned Blocks
 
-Streamline daily financial tracking by removing obsolete future-payment modes and date selections across the application, while elevating monthly planned and recurring commitments into a unified chronological schedule directly beneath the financial calendar.
+Integrate the unwanted money amount directly inside the compact On/Off toggle button, freeing up horizontal space on the header so that Spent and Earned share the remaining width in a balanced 50/50 split where digits are never hidden or truncated.
 
-### User Review & Critical Decisions
+## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following architectural decisions were aligned during the clarification interview:
-> - **Date Restriction in Transactions**: Disallow selecting dates beyond today (`max={getToday()}`) in transaction input forms. Historical and same-day expense/income logging is preserved; speculative future transactions are disabled.
-> - **Unified Bills List Layout**: A single, clean chronological schedule below the monthly calendar integrating both recurring bills and planned expenses ordered by due date, with clear status indicators and amount figures.
-> - **Removal of Activity Future Toggles**: Remove the "With future payments" view mode, badges, and warning prompts from the Transactions/Activity page to keep the ledger strictly focused on actual settled money flow.
+> The following choices were confirmed in Phase 1:
+> - **Toggle Button Content when ON**: Displays the Alert icon, formatted unwanted amount, and an active `ON` badge (e.g., `[ ⚠️ ₹140.00 · ON ]`).
+> - **Right-Side Summary Blocks**: Only two blocks (`Spent` and `Earned`) in an equal 50/50 split (`grid grid-cols-2` / `flex-1`), giving ample horizontal space so large amounts never get hidden.
 
 ---
 
-### 1. Overview & Core Concept
+## 1. Overview & Core Concept
 
-- **What It Does**:
-  1. **Purges "Future Payments" concepts across the site**: The Transactions/Activity tab drops the `"with_future"` view mode switch, the `(+X future)` badges, and switch banners. Transaction entry modals disallow picking future calendar dates.
-  2. **Elevates Bills & Commitments Below the Calendar**: The Financial Calendar view (`/plan` tab) now features a prominent, unified **"Monthly Bills & Planned Commitments"** schedule below the monthly calendar grid, displaying all recurring subscriptions and planned expenses due in the displayed month ordered chronologically.
-- **Target Audience / Persona**: Users managing daily personal finances who want their transaction history to reflect actual settled spending, while using the calendar view as their forward-looking planning command center for upcoming fixed bills.
-- **Key Value**: Eliminates cognitive clutter and confusing future-transaction toggles from daily tracking while giving high visibility to upcoming fixed commitments for the selected month.
-
----
-
-### 2. User Experience & Visual Design
-
-- **Key User Flows**:
-  - **Logging Transactions (`AddTransactionModal`)**: The date picker defaults to today and disables any selection after today (`max="YYYY-MM-DD"`). Users focus purely on logging actual income and expenses.
-  - **Viewing Activity (`TransactionsPage`)**: The transaction list renders as a clean, single chronological stream without view-mode toggles or "with future payments" filters.
-  - **Inspecting Calendar Commitments (`FinancialCalendar`)**:
-    - Below the 7-column calendar grid and legend, a card titled **"Bills & Planned Expenses — [Month Name]"** lists all upcoming recurring bills and planned purchases for that month.
-    - Each item displays:
-      - Clean date marker (`15th` or `Oct 15`) with upcoming/due indicator.
-      - Category icon and title.
-      - Nature badge: quiet text indicator (`Recurring Bill` vs `Planned`).
-      - Tabular formatted currency amount (`font-mono tabular-nums`).
-      - Action controls: click to view/edit or convert/log as expense directly.
-    - An empty state appears when a month has no scheduled commitments, with quick actions `+ Add Bill` and `+ Plan Expense`.
-
-- **Visual Identity & Theme**:
-  - Consistent with Spend's minimal dark aesthetic (`#0A0A0A` canvas, `#141414` container cards, `#262626` hairline borders).
-  - Accent colors used strictly for semantic categorization: Purple for recurring subscriptions/bills, Cyan for planned one-off purchases, and Emerald for settled/paid state.
-  - No static pill clutter; clean typography separated by quiet mid-dots (`·`).
+- **The Problem**: Fitting 3 separate summary blocks (`Spent`, `Earned`, and `Unwanted`) on one line caused digits to get hidden or truncated on smaller mobile viewports.
+- **The Solution**:
+  - Move the unwanted spend amount directly into the **ON/OFF toggle button** when toggled on.
+  - Dedicate the right-hand summary line exclusively to **Spent** and **Earned** in a balanced 50/50 layout.
+  - When the toggle is OFF, the toggle displays `[ ⚠️ Unwanted · OFF ]`. When turned ON, it expands to `[ ⚠️ ₹Amount · ON ]`.
 
 ---
 
-### 3. Key Product Decisions & Trade-Offs
+## 2. Layout & Component Architecture
 
-- **Decision 1: Enforce Strict `max={getToday()}` in Transaction Forms**
-  - *Chosen Approach*: Disable selecting future dates on native date inputs and validate server/client side to block dates `> today`.
-  - *Why*: Future-dated items in an actual expense ledger cause skewed totals, misleading current balance numbers, and confusing sorting.
-  - *Alternatives Considered*: Allowing future dates with a silent warning was rejected because the user specifically noted future payments are not useful in daily life.
-
-- **Decision 2: Unified Chronological Bill List vs Separate Tables**
-  - *Chosen Approach*: Merge recurring bills (mapped to their day of the active month) and planned one-off expenses into a single array sorted by day of month (`day 1` to `day 31`).
-  - *Why*: In personal budgeting, users care about cash outflows in time order (e.g. Rent on 1st, Netflix on 5th, Flight on 12th) regardless of whether the obligation is recurring or one-off.
-  - *Alternatives Considered*: Two split tables forced users to scan two disparate lists to understand their monthly cash demands.
-
-- **Decision 3: Seamless Integration with Calendar Navigation**
-  - *Chosen Approach*: The list dynamically updates when the user clicks previous/next month in the calendar header, keeping the calendar grid and the commitments list in 100% sync.
-
----
-
-### 4. Technical Architecture & Data Strategy
+### Mobile & Desktop Header Diagram
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                          PlanPage (/plan)                              │
-│                                                                        │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │                    FinancialCalendar Component                   │  │
-│  │                                                                  │  │
-│  │  ┌────────────────────────────────────────────────────────────┐  │  │
-│  │  │ Calendar Header (Month Switcher + Quick Actions)           │  │  │
-│  │  └────────────────────────────────────────────────────────────┘  │  │
-│  │  ┌────────────────────────────────────────────────────────────┐  │  │
-│  │  │ 7x6 Monthly Day Grid + Event Indicators                    │  │  │
-│  │  └────────────────────────────────────────────────────────────┘  │  │
-│  │                                                                  │  │
-│  │  ┌────────────────────────────────────────────────────────────┐  │  │
-│  │  │ NEW: Current Month Unified Bills & Planned Schedule        │  │  │
-│  │  │  - Recurring bills due this month                          │  │  │
-│  │  │  - Planned purchases scheduled this month                 │  │  │
-│  │  │  - Chronologically sorted by due day                       │  │  │
-│  │  └────────────────────────────────────────────────────────────┘  │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────────────────────────────────┐
-│                    TransactionsPage & AddTransactionModal              │
-│                                                                        │
-│  - Remove `viewMode` ("with_future") state, filters & local storage    │
-│  - Remove `(+X future)` badges and switch banners                      │
-│  - Add `max={getToday()}` and submission check in AddTransactionModal  │
-└────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                              CashFlowTrendChart Header                                 │
+├─────────────────────────────────────────────────┬──────────────────────────────────────┤
+│  LEFT CLUSTER (View Tabs + Unwanted Toggle)     │  RIGHT CLUSTER (50/50 Summary Blocks)│
+│                                                 │                                      │
+│  ┌───────────────┐  ┌────────────────────────┐  │  ┌────────────────┐┌────────────────┐│
+│  │ Trend | Paymt │  │ ⚠️  ₹140.00  ● ON       │  │  │ ● Spent:      ││ ● Earned:      ││
+│  └───────────────┘  └────────────────────────┘  │  │   ₹3,689.00    ││   ₹65,000.00   ││
+│                     (When OFF: [⚠️ Unwanted])   │  │   (50% Width)  ││   (50% Width)  ││
+│                                                 │  └────────────────┘└────────────────┘│
+└─────────────────────────────────────────────────┴──────────────────────────────────────┘
 ```
 
-- **Component & State Flow**:
-  1. `TransactionsPage.tsx`: Drop `viewMode`, `futureCount`, `"with_future"` filter options. Streamline transaction query to standard date-descending sort.
-  2. `AddTransactionModal.tsx`: Set `max={getToday()}` on date picker. Add submission guard ensuring `date <= getToday()`.
-  3. `FinancialCalendar.tsx`:
-     - Filter `recurringExpenses` and calculate their due date for `currentMonthKey`.
-     - Filter `plannedExpenses` whose date falls within `currentMonthKey`.
-     - Merge into `monthlyCommitments`, sort by date ascending.
-     - Render the unified schedule container directly beneath the calendar legend.
-  4. `HelpModal.tsx`: Clean up the FAQ question explaining "With future payments".
+---
+
+## 3. User Experience & Visual Details
+
+1. **Unwanted Toggle States**:
+   - **OFF State**:
+     - Background: `#181818`, border `#262626`, muted gray text.
+     - Content: Alert icon + "Unwanted" + muted dot + "OFF" label.
+   - **ON State**:
+     - Background: `bg-amber-500/15`, border `border-amber-500/40`, bright amber text.
+     - Content: Alert icon + formatted amount (e.g., `₹140.00` in tabular font) + pulsing amber dot + "ON" pill.
+     - Zero unread/unwanted state: If `totalUnwanted === 0`, displays `[ ⚠️ ₹0 · ON ]`.
+
+2. **50/50 Equal-Width Spent & Earned Blocks**:
+   - Both blocks receive equal `flex-1` width on mobile and desktop.
+   - Generous digit allowance: Since space is split between only 2 blocks, currency amounts up to 10–12 digits fit comfortably without truncation or ellipsis.
+   - High contrast dots: Red dot for Spent (`bg-rose-500`), Blue dot for Earned (`bg-blue-500`).
+
+---
+
+## 4. Technical Implementation Steps
+
+### `src/components/overview/CashFlowTrendChart.tsx`
+1. **Unwanted Toggle Update**:
+   - When `showUnwanted` is active, render `unwantedFormatted` alongside the alert icon and ON badge.
+2. **Summary Blocks Refactoring**:
+   - Remove the third Unwanted block from the right-hand stats cluster.
+   - Style Spent and Earned with `grid grid-cols-2 gap-1.5 w-full sm:w-auto sm:flex` with equal `flex-1 min-w-0` width.
+   - Keep dynamic font scaling (`text-xs sm:text-sm`) for tabular numerals.
+
+---
+
+## 5. Verification Plan
+
+- Run `lint_applet` to ensure zero TypeScript errors.
+- Run `compile_applet` to verify production build.
+- Verify toggle state changes between OFF and ON, ensuring the amount appears directly on the button and Spent/Earned never clip digits.

@@ -45,7 +45,8 @@ if (typeof window !== "undefined") {
     }
   });
 
-  // Promptly check for updated service workers on page load
+  // No automatic SW update in development
+  /*
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.getRegistrations().then((registrations) => {
       for (const reg of registrations) {
@@ -53,6 +54,7 @@ if (typeof window !== "undefined") {
       }
     });
   }
+  */
 }
 
 createRoot(document.getElementById('root')!).render(<App />);

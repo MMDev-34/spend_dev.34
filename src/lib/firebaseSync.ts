@@ -56,6 +56,7 @@ export function subscribeToUserCloudData(
             date: data.date,
             note: data.note,
             paymentMethod: data.paymentMethod,
+            isUnwanted: Boolean(data.isUnwanted && data.isUnwanted !== "false"),
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
           } as Transaction;

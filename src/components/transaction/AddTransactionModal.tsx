@@ -416,15 +416,16 @@ export const AddTransactionModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsUnwanted(!isUnwanted)}
-                  className={`flex items-center gap-1 px-2.5 sm:px-3 py-2 rounded-xl border text-xs transition shrink-0 cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition shrink-0 cursor-pointer ${
                     isUnwanted
-                      ? "bg-rose-500/15 border-rose-500/40 text-rose-300 font-semibold shadow-sm"
+                      ? "bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-950/20"
                       : "bg-[#1C1C1C] border-[#262626] text-[#71717A] hover:text-[#D4D4D8] hover:bg-neutral-800"
                   }`}
                   title="Tag as unwanted or impulse spend"
                 >
-                  <AlertTriangle className={`w-3.5 h-3.5 ${isUnwanted ? "text-rose-400" : "text-[#71717A]"}`} />
-                  <span className="hidden sm:inline">Unwanted</span>
+                  <AlertTriangle className={`w-3.5 h-3.5 ${isUnwanted ? "text-amber-400" : "text-[#71717A]"}`} />
+                  <span>Unwanted</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isUnwanted ? "bg-amber-400" : "bg-neutral-600"}`} />
                 </button>
               )}
             </div>

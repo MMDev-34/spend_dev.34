@@ -165,6 +165,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const now = new Date().toISOString();
       const newTx: Transaction = {
         ...txData,
+        isUnwanted: txData.type === "expense" ? Boolean(txData.isUnwanted) : false,
         id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         createdAt: now,
         updatedAt: now,
@@ -187,7 +188,17 @@ export const useAppStore = create<AppState>((set, get) => {
       syncAndSet((state) => {
         const nextTransactions = state.transactions.map((t) => {
           if (t.id === id) {
-            updatedTx = { ...t, ...updates, updatedAt: now };
+            const nextType = updates.type ?? t.type;
+            const nextIsUnwanted = updates.isUnwanted !== undefined 
+              ? (nextType === "expense" ? Boolean(updates.isUnwanted) : false)
+              : (nextType === "expense" ? Boolean(t.isUnwanted) : false);
+
+            updatedTx = { 
+              ...t, 
+              ...updates, 
+              isUnwanted: nextIsUnwanted,
+              updatedAt: now 
+            };
             return updatedTx;
           }
           return t;

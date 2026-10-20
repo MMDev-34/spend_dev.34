@@ -27,7 +27,8 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
-  Lock
+  Lock,
+  LogOut
 } from "lucide-react";
 
 export const AccountSettingsPage: React.FC = () => {
@@ -58,27 +59,11 @@ export const AccountSettingsPage: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
-  const [twoStepEnabled, setTwoStepEnabled] = useState(() => {
-    try {
-      return localStorage.getItem("spend_two_step_auth") === "true";
-    } catch {
-      return false;
-    }
-  });
+
 
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleToggleTwoStep = () => {
-    const nextVal = !twoStepEnabled;
-    setTwoStepEnabled(nextVal);
-    try {
-      localStorage.setItem("spend_two_step_auth", String(nextVal));
-    } catch {}
-    showToast(
-      nextVal ? "Two-step verification activated" : "Two-step verification deactivated",
-      "info"
-    );
-  };
+
 
   const handleOpenPasswordModal = () => {
     setPasswordMode("change");
@@ -266,33 +251,7 @@ export const AccountSettingsPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Two-step Verification Row */}
-        <div className="flex items-center justify-between p-4 sm:p-4.5">
-          <div className="space-y-0.5 pr-3">
-            <span className="text-sm font-semibold text-[#F5F5F5] block">
-              Two step verification
-            </span>
-            <span className="text-xs text-[#71717A] block">
-              Extra security layer for signing in and account recovery
-            </span>
-          </div>
 
-          {/* Toggle Switch */}
-          <button
-            type="button"
-            onClick={handleToggleTwoStep}
-            className={`w-12 h-6.5 rounded-full transition-colors relative cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
-              twoStepEnabled ? "bg-emerald-500" : "bg-[#2A2A2A]"
-            }`}
-            aria-pressed={twoStepEnabled}
-          >
-            <span
-              className={`absolute top-1 left-1 w-4.5 h-4.5 rounded-full bg-white transition-transform ${
-                twoStepEnabled ? "translate-x-5.5" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
 
         {/* Connected Devices Row */}
         <div
@@ -313,7 +272,31 @@ export const AccountSettingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Delete Account Section (Matching Reference Screen 5 bottom) */}
+      {/* 3. Sign Out Card */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#141414] border border-[#262626] flex items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <h3 className="text-sm font-bold text-[#F5F5F5]">
+            Sign out of account
+          </h3>
+          <p className="text-xs text-[#71717A]">
+            End your current session on this device
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            signOut();
+            navigate("/");
+          }}
+          className="px-3.5 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 text-xs font-semibold transition active:scale-95 shrink-0 cursor-pointer flex items-center gap-1.5"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Sign Out</span>
+        </button>
+      </div>
+
+      {/* 4. Delete Account Section */}
       <div className="p-4 sm:p-5 rounded-2xl bg-[#141414] border border-[#262626] flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <h3 className="text-sm font-bold text-rose-400">
