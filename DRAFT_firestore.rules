@@ -1,0 +1,230 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny-all catch-all safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validators
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'email', 'displayName']) &&
+        data.keys().hasOnly(['id', 'email', 'displayName', 'photoURL', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id == request.auth.uid &&
+        data.email is string && data.email.size() <= 256 &&
+        data.displayName is string && data.displayName.size() <= 128 &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1024));
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['id', 'userId', 'type', 'amount', 'categoryId', 'date']) &&
+        data.keys().hasOnly(['id', 'userId', 'type', 'amount', 'categoryId', 'date', 'note', 'paymentMethod', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId == request.auth.uid &&
+        (data.type == 'expense' || data.type == 'income') &&
+        data.amount is number && data.amount >= 0 &&
+        data.categoryId is string && data.categoryId.size() <= 128 &&
+        data.date is string && data.date.size() <= 32 &&
+        (!('note' in data) || (data.note is string && data.note.size() <= 512)) &&
+        (!('paymentMethod' in data) || (data.paymentMethod is string && data.paymentMethod.size() <= 64));
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'type']) &&
+        data.keys().hasOnly(['id', 'userId', 'name', 'icon', 'color', 'type', 'isDefault', 'createdAt', 'updatedAt', 'order']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId == request.auth.uid &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 128 &&
+        (data.type == 'expense' || data.type == 'income' || data.type == 'both') &&
+        (!('icon' in data) || (data.icon is string && data.icon.size() <= 32)) &&
+        (!('color' in data) || (data.color is string && data.color.size() <= 32)) &&
+        (!('isDefault' in data) || data.isDefault is bool) &&
+        (!('order' in data) || data.order is number);
+    }
+
+    function isValidPerson(data) {
+      return data.keys().hasAll(['id', 'userId', 'name']) &&
+        data.keys().hasOnly(['id', 'userId', 'name', 'createdAt', 'updatedAt', 'phone', 'email', 'note', 'notes', 'avatar']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId == request.auth.uid &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 128;
+    }
+
+    function isValidLoan(data) {
+      return data.keys().hasAll(['id', 'userId', 'personId', 'amount', 'direction']) &&
+        data.keys().hasOnly(['id', 'userId', 'personId', 'amount', 'direction', 'description', 'note', 'notes', 'date', 'dueDate', 'repayments', 'createdAt', 'updatedAt', 'status', 'isSettled']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId == request.auth.uid &&
+        data.personId is string && data.personId.size() <= 128 &&
+        data.amount is number && data.amount >= 0 &&
+        (data.direction == 'lent' || data.direction == 'borrowed') &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 512)) &&
+        (!('note' in data) || (data.note is string && data.note.size() <= 512)) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 512)) &&
+        (!('date' in data) || (data.date is string && data.date.size() <= 32)) &&
+        (!('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 32)) &&
+        (!('repayments' in data) || (data.repayments is list && data.repayments.size() <= 200));
+    }
+
+    function isValidBudget(data) {
+      return data.keys().hasAll(['id', 'userId', 'categoryId', 'amount', 'duration']) &&
+        data.keys().hasOnly(['id', 'userId', 'categoryId', 'amount', 'duration', 'createdAt', 'updatedAt', 'category']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId == request.auth.uid &&
+        data.categoryId is string && data.categoryId.size() <= 128 &&
+        data.amount is number && data.amount >= 0 &&
+        (data.duration == 'weekly' || data.duration == 'monthly' || data.duration == 'yearly');
+    }
+
+    function isValidRecurring(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'amount', 'frequency', 'categoryId']) &&
+        data.keys().hasOnly(['id', 'userId', 'title', 'amount', 'frequency', 'dueDay', 'dueMonth', 'dueWeekday', 'categoryId', 'startDate', 'endDate', 'notes', 'note', 'reminderDaysBefore', 'autoRemind', 'isPaused', 'paidDates', 'createdAt', 'updatedAt', 'category']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId == request.auth.uid &&
+        data.title is string && data.title.size() <= 128 &&
+        data.amount is number && data.amount >= 0 &&
+        (data.frequency == 'daily' || data.frequency == 'weekly' || data.frequency == 'biweekly' || data.frequency == 'monthly' || data.frequency == 'yearly') &&
+        (!('dueDay' in data) || data.dueDay is number) &&
+        (!('dueMonth' in data) || (data.dueMonth is number && data.dueMonth >= 1 && data.dueMonth <= 12)) &&
+        (!('dueWeekday' in data) || (data.dueWeekday is number && data.dueWeekday >= 0 && data.dueWeekday <= 6)) &&
+        data.categoryId is string && data.categoryId.size() <= 128 &&
+        (!('startDate' in data) || (data.startDate is string && data.startDate.size() <= 32)) &&
+        (!('endDate' in data) || (data.endDate is string && data.endDate.size() <= 32)) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 512)) &&
+        (!('note' in data) || (data.note is string && data.note.size() <= 512)) &&
+        (!('reminderDaysBefore' in data) || data.reminderDaysBefore is number) &&
+        (!('autoRemind' in data) || data.autoRemind is bool) &&
+        (!('isPaused' in data) || data.isPaused is bool) &&
+        (!('paidDates' in data) || (data.paidDates is list && data.paidDates.size() <= 500));
+    }
+
+    function isValidPlanned(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'amount', 'targetDate', 'categoryId']) &&
+        data.keys().hasOnly(['id', 'userId', 'title', 'amount', 'targetDate', 'categoryId', 'reminderDaysBefore', 'notes', 'note', 'isPaid', 'paidTransactionId', 'createdAt', 'updatedAt', 'category']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId == request.auth.uid &&
+        data.title is string && data.title.size() <= 128 &&
+        data.amount is number && data.amount >= 0 &&
+        data.targetDate is string && data.targetDate.size() <= 32 &&
+        data.categoryId is string && data.categoryId.size() <= 128 &&
+        (!('reminderDaysBefore' in data) || data.reminderDaysBefore is number) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 512)) &&
+        (!('note' in data) || (data.note is string && data.note.size() <= 512)) &&
+        (!('isPaid' in data) || data.isPaid is bool) &&
+        (!('paidTransactionId' in data) || (data.paidTransactionId is string && data.paidTransactionId.size() <= 128));
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['userId', 'currency', 'theme', 'weekStartsOn', 'numberFormat']) &&
+        data.keys().hasOnly(['userId', 'currency', 'theme', 'weekStartsOn', 'numberFormat', 'updatedAt']) &&
+        data.userId == request.auth.uid &&
+        data.currency is string && data.currency.size() <= 16 &&
+        (data.theme == 'dark' || data.theme == 'light' || data.theme == 'system') &&
+        (data.weekStartsOn == 'monday' || data.weekStartsOn == 'sunday') &&
+        (data.numberFormat == 'comma' || data.numberFormat == 'dot' || data.numberFormat == 'space');
+    }
+
+    // 1. Users Profile Collection (Isolated PII)
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false; // Blanket enumeration forbidden
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUser(incoming()) && incoming().id == existing().id && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // 2. Transactions Collection
+    match /transactions/{transactionId} {
+      allow get: if isSignedIn() && isValidId(transactionId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(transactionId) && isValidTransaction(incoming());
+      allow update: if isSignedIn() && isValidId(transactionId) && existing().userId == request.auth.uid && incoming().userId == existing().userId && isValidTransaction(incoming());
+      allow delete: if isSignedIn() && isValidId(transactionId) && existing().userId == request.auth.uid;
+    }
+
+    // 3. Categories Collection
+    match /categories/{categoryId} {
+      allow get: if isSignedIn() && isValidId(categoryId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(categoryId) && isValidCategory(incoming());
+      allow update: if isSignedIn() && isValidId(categoryId) && existing().userId == request.auth.uid && incoming().userId == existing().userId && isValidCategory(incoming());
+      allow delete: if isSignedIn() && isValidId(categoryId) && existing().userId == request.auth.uid;
+    }
+
+    // 4. People Collection
+    match /people/{personId} {
+      allow get: if isSignedIn() && isValidId(personId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(personId) && isValidPerson(incoming());
+      allow update: if isSignedIn() && isValidId(personId) && existing().userId == request.auth.uid && incoming().userId == existing().userId && isValidPerson(incoming());
+      allow delete: if isSignedIn() && isValidId(personId) && existing().userId == request.auth.uid;
+    }
+
+    // 5. Loans Collection
+    match /loans/{loanId} {
+      allow get: if isSignedIn() && isValidId(loanId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(loanId) && isValidLoan(incoming());
+      allow update: if isSignedIn() && isValidId(loanId) && existing().userId == request.auth.uid && incoming().userId == existing().userId && isValidLoan(incoming());
+      allow delete: if isSignedIn() && isValidId(loanId) && existing().userId == request.auth.uid;
+    }
+
+    // 6. Category Budgets Collection
+    match /categoryBudgets/{budgetId} {
+      allow get: if isSignedIn() && isValidId(budgetId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(budgetId) && isValidBudget(incoming());
+      allow update: if isSignedIn() && isValidId(budgetId) && existing().userId == request.auth.uid && incoming().userId == existing().userId && isValidBudget(incoming());
+      allow delete: if isSignedIn() && isValidId(budgetId) && existing().userId == request.auth.uid;
+    }
+
+    // 7. Recurring Expenses Collection
+    match /recurringExpenses/{recurringId} {
+      allow get: if isSignedIn() && isValidId(recurringId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(recurringId) && isValidRecurring(incoming());
+      allow update: if isSignedIn() && isValidId(recurringId) && existing().userId == request.auth.uid && incoming().userId == existing().userId && isValidRecurring(incoming());
+      allow delete: if isSignedIn() && isValidId(recurringId) && existing().userId == request.auth.uid;
+    }
+
+    // 8. Planned Expenses Collection
+    match /plannedExpenses/{plannedId} {
+      allow get: if isSignedIn() && isValidId(plannedId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(plannedId) && isValidPlanned(incoming());
+      allow update: if isSignedIn() && isValidId(plannedId) && existing().userId == request.auth.uid && incoming().userId == existing().userId && isValidPlanned(incoming());
+      allow delete: if isSignedIn() && isValidId(plannedId) && existing().userId == request.auth.uid;
+    }
+
+    // 9. User Settings Collection
+    match /userSettings/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && isValidId(userId) && isValidSettings(incoming());
+      allow update: if isOwner(userId) && isValidId(userId) && existing().userId == request.auth.uid && incoming().userId == existing().userId && isValidSettings(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['currency', 'theme', 'weekStartsOn', 'numberFormat', 'updatedAt']);
+      allow delete: if false;
+    }
+  }
+}

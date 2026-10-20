@@ -1,0 +1,565 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile representation stored upon authentication",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique user identifier matching auth uid",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 256
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name",
+          "maxLength": 128
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "User avatar image URL",
+          "maxLength": 1024
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the user account profile was created",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the user account profile was last updated",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "email", "displayName"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial income or expense transaction",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique transaction ID",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "ID of user owning this transaction",
+          "maxLength": 128
+        },
+        "type": {
+          "type": "string",
+          "description": "Transaction type (expense or income)",
+          "enum": ["expense", "income"]
+        },
+        "amount": {
+          "type": "number",
+          "description": "Transaction amount in minor currency units"
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Reference ID of transaction category",
+          "maxLength": 128
+        },
+        "date": {
+          "type": "string",
+          "description": "Transaction date in YYYY-MM-DD",
+          "maxLength": 32
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional memo or description for transaction",
+          "maxLength": 512
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Optional payment method used",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        },
+        "isUnwanted": {
+          "type": "boolean",
+          "description": "Optional flag for impulse or unwanted spend"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "type", "amount", "categoryId", "date"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Transaction category classification",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique category ID",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "ID of user who owns this category",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of category",
+          "maxLength": 128
+        },
+        "icon": {
+          "type": "string",
+          "description": "Icon emoji or identifier",
+          "maxLength": 32
+        },
+        "color": {
+          "type": "string",
+          "description": "Hex color code",
+          "maxLength": 32
+        },
+        "type": {
+          "type": "string",
+          "description": "Expense or income category type",
+          "enum": ["expense", "income", "both"]
+        },
+        "isDefault": {
+          "type": "boolean",
+          "description": "Whether this is a standard system default category"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "name", "type"]
+    },
+    "Person": {
+      "title": "Person",
+      "description": "Contact or person associated with loan records",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique person ID",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "ID of user who owns this contact",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of contact",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "name"]
+    },
+    "Loan": {
+      "title": "Loan",
+      "description": "Borrow or lend tracker entry",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique loan record ID",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "ID of user who owns this loan",
+          "maxLength": 128
+        },
+        "personId": {
+          "type": "string",
+          "description": "ID of contact involved",
+          "maxLength": 128
+        },
+        "amount": {
+          "type": "number",
+          "description": "Principal loan amount in minor units"
+        },
+        "direction": {
+          "type": "string",
+          "description": "Lent or borrowed direction",
+          "enum": ["lent", "borrowed"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description for loan",
+          "maxLength": 512
+        },
+        "note": {
+          "type": "string",
+          "description": "Loan note",
+          "maxLength": 512
+        },
+        "date": {
+          "type": "string",
+          "description": "Loan origination date in YYYY-MM-DD",
+          "maxLength": 32
+        },
+        "dueDate": {
+          "type": "string",
+          "description": "Due date in YYYY-MM-DD",
+          "maxLength": 32
+        },
+        "repayments": {
+          "type": "array",
+          "description": "List of repayments made against this loan"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "personId", "amount", "direction"]
+    },
+    "CategoryBudget": {
+      "title": "CategoryBudget",
+      "description": "Target spending budget per category",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique budget ID",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "ID of user who owns this budget",
+          "maxLength": 128
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Target category ID",
+          "maxLength": 128
+        },
+        "amount": {
+          "type": "number",
+          "description": "Budget limit in minor units"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Duration period (monthly, weekly, yearly)",
+          "enum": ["monthly", "weekly", "yearly"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "categoryId", "amount", "duration"]
+    },
+    "RecurringExpense": {
+      "title": "RecurringExpense",
+      "description": "Recurring bill or subscription",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique recurring item ID",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "ID of user who owns this recurring item",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of recurring bill",
+          "maxLength": 128
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount in minor units"
+        },
+        "frequency": {
+          "type": "string",
+          "description": "Recurrence frequency",
+          "enum": ["daily", "weekly", "biweekly", "monthly", "yearly"]
+        },
+        "dueDay": {
+          "type": "number",
+          "description": "Day of period due"
+        },
+        "dueMonth": {
+          "type": "number",
+          "description": "Month of year due for yearly bills (1-12)"
+        },
+        "dueWeekday": {
+          "type": "number",
+          "description": "Weekday due for weekly/biweekly bills (0-6)"
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Category ID",
+          "maxLength": 128
+        },
+        "startDate": {
+          "type": "string",
+          "description": "Start date in YYYY-MM-DD",
+          "maxLength": 32
+        },
+        "endDate": {
+          "type": "string",
+          "description": "End date in YYYY-MM-DD",
+          "maxLength": 32
+        },
+        "notes": {
+          "type": "string",
+          "description": "Notes",
+          "maxLength": 512
+        },
+        "reminderDaysBefore": {
+          "type": "number",
+          "description": "Days before due date to alert user"
+        },
+        "autoRemind": {
+          "type": "boolean",
+          "description": "Whether auto reminder is enabled"
+        },
+        "isPaused": {
+          "type": "boolean",
+          "description": "Whether recurring bill is paused"
+        },
+        "paidDates": {
+          "type": "array",
+          "description": "List of cycle dates where bill was settled"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "title", "amount", "frequency", "categoryId"]
+    },
+    "PlannedExpense": {
+      "title": "PlannedExpense",
+      "description": "Planned future expense item",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique planned expense ID",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "ID of user who owns this plan",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of planned expense",
+          "maxLength": 128
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount in minor units"
+        },
+        "targetDate": {
+          "type": "string",
+          "description": "Target date YYYY-MM-DD",
+          "maxLength": 32
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Category ID",
+          "maxLength": 128
+        },
+        "notes": {
+          "type": "string",
+          "description": "Notes",
+          "maxLength": 512
+        },
+        "isPaid": {
+          "type": "boolean",
+          "description": "Whether planned item has been paid"
+        },
+        "paidDate": {
+          "type": "string",
+          "description": "Date YYYY-MM-DD when planned expense was paid",
+          "maxLength": 32
+        },
+        "paidTransactionId": {
+          "type": "string",
+          "description": "Reference ID of transaction that fulfilled this plan",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "title", "amount", "targetDate", "categoryId"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "Preferences and display settings for user",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "User identifier",
+          "maxLength": 128
+        },
+        "currency": {
+          "type": "string",
+          "description": "Active currency symbol",
+          "maxLength": 16
+        },
+        "theme": {
+          "type": "string",
+          "description": "Theme mode",
+          "enum": ["dark", "light", "system"]
+        },
+        "weekStartsOn": {
+          "type": "string",
+          "description": "Start day of week",
+          "enum": ["monday", "sunday"]
+        },
+        "numberFormat": {
+          "type": "string",
+          "description": "Number formatting style",
+          "enum": ["comma", "dot", "space"]
+        },
+        "overallMonthlyBudget": {
+          "type": "number",
+          "description": "Overall monthly spending limit in minor currency units"
+        },
+        "hideSensitiveBalances": {
+          "type": "boolean",
+          "description": "Whether sensitive net balances should be masked by default"
+        },
+        "confirmBeforeDelete": {
+          "type": "boolean",
+          "description": "Whether to require confirmation before deletion"
+        },
+        "showDecimals": {
+          "type": "boolean",
+          "description": "Whether minor units/decimals are explicitly shown"
+        },
+        "defaultPaymentMethod": {
+          "type": "string",
+          "description": "Default payment method pre-selected for quick entries",
+          "maxLength": 32
+        },
+        "budgetAlertThreshold": {
+          "type": "number",
+          "description": "Percentage threshold (e.g. 80, 90, 100) to trigger budget warning badge"
+        },
+        "defaultStartRoute": {
+          "type": "string",
+          "description": "Default view route opened on app boot",
+          "maxLength": 64
+        },
+        "billAlertDays": {
+          "type": "number",
+          "description": "Days in advance to alert about upcoming bills and loan deadlines"
+        },
+        "hapticFeedback": {
+          "type": "boolean",
+          "description": "Mobile haptic vibration feedback toggle"
+        },
+        "enableUnwantedSpendTracking": {
+          "type": "boolean",
+          "description": "Whether impulse/unwanted spend tracking is highlighted"
+        },
+        "autoBackupReminder": {
+          "type": "string",
+          "description": "Frequency for automated local backup notifications",
+          "maxLength": 32
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["userId", "currency", "theme", "weekStartsOn", "numberFormat"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Profile information for authenticated user"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "User transaction records"
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Custom categories defined by user"
+    },
+    "/people/{personId}": {
+      "schema": "Person",
+      "description": "Contacts for borrow/lend records"
+    },
+    "/loans/{loanId}": {
+      "schema": "Loan",
+      "description": "Borrow and lend loans"
+    },
+    "/categoryBudgets/{budgetId}": {
+      "schema": "CategoryBudget",
+      "description": "Category budget limits"
+    },
+    "/recurringExpenses/{recurringId}": {
+      "schema": "RecurringExpense",
+      "description": "Recurring bills and subscriptions"
+    },
+    "/plannedExpenses/{plannedId}": {
+      "schema": "PlannedExpense",
+      "description": "Planned future expenses"
+    },
+    "/userSettings/{userId}": {
+      "schema": "UserSettings",
+      "description": "User account settings and preferences"
+    }
+  }
+}
