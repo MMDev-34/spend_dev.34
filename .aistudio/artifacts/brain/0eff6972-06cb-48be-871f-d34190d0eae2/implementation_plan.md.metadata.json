@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for integrating unwanted spend summary inside the toggle button and balancing Spent/Earned blocks.",
-  "updatedAt":  "2026-10-20T13:05:30.878473364Z",
+  "summary":  "Implementation plan for recording transfers and lent amounts as expense transactions with a 'Transfer' tag, displaying the transfer badge in transaction lists and details, syncing with Borrow & Lend, and updating Firebase rules.",
+  "updatedAt":  "2026-10-22T05:24:30.801829820Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

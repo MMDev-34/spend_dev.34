@@ -119,13 +119,20 @@ export const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = (
             </span>
             {formatMoney(transaction.amount, settings.currency, settings.numberFormat)}
           </div>
-          <span className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-            isExpense 
-              ? "bg-rose-500/10 text-rose-400 border-rose-500/20" 
-              : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-          }`}>
-            {isExpense ? "Expense" : "Income"}
-          </span>
+          <div className="flex items-center justify-center gap-1.5 flex-wrap pt-0.5">
+            <span className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+              isExpense 
+                ? "bg-rose-500/10 text-rose-400 border-rose-500/20" 
+                : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+            }`}>
+              {isExpense ? "Expense" : "Income"}
+            </span>
+            {transaction.tag === "transfer" && (
+              <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border bg-sky-500/15 text-sky-400 border-sky-500/30">
+                Transfer
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Detailed Fields List */}

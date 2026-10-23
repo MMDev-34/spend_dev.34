@@ -521,6 +521,11 @@ export const TransactionsPage: React.FC = () => {
                               <span className="text-xs sm:text-sm font-semibold text-[#F5F5F5] truncate group-hover:text-emerald-400 transition-colors">
                                 {cat?.name || "General"}
                               </span>
+                              {t.tag === "transfer" && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 border border-sky-500/30 font-bold shrink-0 tracking-wide" title="Transfer / Lent to Contact">
+                                  Transfer
+                                </span>
+                              )}
                               {t.isUnwanted && (
                                 <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold shrink-0" title="Unwanted / Impulse Spend">
                                   Unwanted
@@ -570,7 +575,7 @@ export const TransactionsPage: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openAddModal(t.type, t);
+                                openAddModal(t.tag === "transfer" ? "transfer" : t.type, t);
                               }}
                               className="p-1 rounded-lg text-[#71717A] hover:text-[#F5F5F5] hover:bg-neutral-800 transition"
                               title="Edit directly"
@@ -608,7 +613,7 @@ export const TransactionsPage: React.FC = () => {
           setIsDetailsModalOpen(false);
           setSelectedTransaction(null);
         }}
-        onEdit={(t) => openAddModal(t.type, t)}
+        onEdit={(t) => openAddModal(t.tag === "transfer" ? "transfer" : t.type, t)}
         onDuplicate={handleDuplicate}
         onDelete={(tx) => handleExecuteDelete(tx)}
         settings={settings}

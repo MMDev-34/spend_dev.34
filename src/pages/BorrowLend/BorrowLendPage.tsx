@@ -27,9 +27,11 @@ type FilterTab = "all" | "owed_to_me" | "i_owe";
 export const BorrowLendPage: React.FC = () => {
   const people = useAppStore((s) => s.people);
   const loans = useAppStore((s) => s.loans);
+  const categories = useAppStore((s) => s.categories);
   const settings = useAppStore((s) => s.settings);
   const addPerson = useAppStore((s) => s.addPerson);
   const addLoan = useAppStore((s) => s.addLoan);
+  const addTransaction = useAppStore((s) => s.addTransaction);
   const deleteLoan = useAppStore((s) => s.deleteLoan);
   const showToast = useUIStore((s) => s.showToast);
 
@@ -187,7 +189,26 @@ export const BorrowLendPage: React.FC = () => {
     });
 
     const targetName = peopleMap.get(targetPersonId)?.name || personName;
-    showToast(`Added ${direction === "lent" ? "lent" : "borrowed"} record for ${targetName}`);
+
+    // When lending money, also auto-record an expense transaction tagged as 'transfer'
+    if (direction === "lent") {
+      const transferCat = categories.find((c) => c.id === "cat-transfer" || c.name.toLowerCase() === "transfer");
+      const defaultCat = transferCat || categories.find((c) => c.type === "expense" || c.type === "both");
+      addTransaction({
+        type: "expense",
+        tag: "transfer",
+        amount,
+        categoryId: defaultCat?.id || "cat-transfer",
+        date: startDate || getToday(),
+        note: description.trim()
+          ? `${description.trim()} (Lent to: ${targetName})`
+          : `Lent to ${targetName}`,
+        paymentMethod: settings.defaultPaymentMethod || "upi",
+      });
+      showToast(`Added lent record & logged expense for ${targetName}`);
+    } else {
+      showToast(`Added borrowed record from ${targetName}`);
+    }
     setIsAddModalOpen(false);
     setAmountStr("");
     setPersonName("");

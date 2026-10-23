@@ -103,7 +103,7 @@ export function formatRelativeDate(dateStr: string): string {
 }
 
 /**
- * Formats a date specifically for picker buttons (e.g. "Today, Oct 6", "Yesterday, Oct 5", "Oct 12, 2026")
+ * Formats a date specifically for picker buttons (e.g. "Today, 20 Oct", "Yesterday, 19 Oct", "20 Oct 2026")
  */
 export function formatDateButtonLabel(dateStr: string): string {
   if (!dateStr || typeof dateStr !== "string") return "Select Date";
@@ -114,7 +114,8 @@ export function formatDateButtonLabel(dateStr: string): string {
   const dateObj = new Date(y, m - 1, d);
   if (isNaN(dateObj.getTime())) return dateStr;
 
-  const shortDate = dateObj.toLocaleDateString("en-US", { day: "numeric", month: "short" });
+  const monthShort = dateObj.toLocaleDateString("en-US", { month: "short" });
+  const shortDate = `${d} ${monthShort}`;
   if (dateStr === today) return `Today, ${shortDate}`;
 
   const yesterday = new Date();
@@ -129,7 +130,21 @@ export function formatDateButtonLabel(dateStr: string): string {
 
   const currentYear = new Date().getFullYear();
   if (y === currentYear) return shortDate;
-  return dateObj.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
+  return `${d} ${monthShort} ${y}`;
+}
+
+/**
+ * Returns strictly day and month (e.g. "20 Oct")
+ */
+export function formatDateShort(dateStr: string): string {
+  if (!dateStr || typeof dateStr !== "string") return "";
+  const parts = dateStr.split("-").map(Number);
+  if (parts.length < 3 || parts.some(isNaN)) return dateStr;
+  const [y, m, d] = parts;
+  const dateObj = new Date(y, m - 1, d);
+  if (isNaN(dateObj.getTime())) return dateStr;
+  const monthShort = dateObj.toLocaleDateString("en-US", { month: "short" });
+  return `${d} ${monthShort}`;
 }
 
 /**

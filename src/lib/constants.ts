@@ -118,6 +118,15 @@ export const DEFAULT_CATEGORIES: Category[] = [
     isDefault: true,
     createdAt: "2026-01-01T00:00:00.000Z",
   },
+  {
+    id: "cat-transfer",
+    name: "Transfer",
+    icon: "🔄",
+    color: "#0EA5E9", // Sky
+    type: "both",
+    isDefault: true,
+    createdAt: "2026-01-01T00:00:00.000Z",
+  },
 ];
 
 export const DEFAULT_CATEGORY_BUDGETS: import("@/types/plan").CategoryBudget[] = [

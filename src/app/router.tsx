@@ -24,6 +24,21 @@ const RouterContext = createContext<RouterContextType>({
   navigate: () => {},
 });
 
+let globalNavigate: ((path: RoutePath) => void) | null = null;
+
+export const navigateTo = (path: RoutePath) => {
+  if (globalNavigate) {
+    globalNavigate(path);
+  } else if (typeof window !== "undefined") {
+    try {
+      window.history.pushState({}, "", path);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    } catch {
+      window.location.hash = path.replace(/^\//, "");
+    }
+  }
+};
+
 function getRouteFromLocation(): RoutePath {
   if (typeof window === "undefined") return "/";
 
@@ -84,6 +99,8 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setRoute(path);
     window.scrollTo({ top: 0, behavior: "instant" });
   }, []);
+
+  globalNavigate = navigate;
 
   return (
     <RouterContext.Provider value={{ route, navigate }}>

@@ -151,8 +151,8 @@ export const PeakExpenseDaysChart: React.FC<PeakExpenseDaysChartProps> = ({
             const isSelected = selectedDayDate === item.date;
             const theme = getRankTheme(item.rank);
 
-            // Scale to 75% max height so floating value label fits with headroom
-            const targetHeightPercent = Math.max(14, Math.round((item.total / maxDaySpend) * 75));
+            // Scale proportionally with 82% max height so floating value label fits with headroom
+            const targetHeightPercent = Math.max(4, Math.round((item.total / maxDaySpend) * 82));
             const currentHeight = isMounted ? targetHeightPercent : 0;
 
             return (

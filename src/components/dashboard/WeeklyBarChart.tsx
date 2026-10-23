@@ -147,9 +147,14 @@ export const WeeklyBarChart: React.FC<WeeklyBarChartProps> = ({ settings }) => {
         <div className="grid grid-cols-7 gap-1.5 sm:gap-2 items-end h-32 sm:h-36 px-0.5 pt-6">
           {days.map((day, idx) => {
             const isSelected = selectedIndex === idx;
+            // Proportional height scaling:
+            // - True linear ratio proportional to amount (day.total / maxDaySpend)
+            // - Scaled to 82% to leave clean breathing room for the top amount label
+            // - A gentle 4% minimum for non-zero spending so small values remain visible
+            // - Flat 3px baseline for zero-spending days
             const heightPercent = day.total > 0 
-              ? Math.max(14, Math.round((day.total / maxDaySpend) * 75)) 
-              : 6;
+              ? Math.max(4, Math.round((day.total / maxDaySpend) * 82)) 
+              : 0;
 
             return (
               <button
@@ -173,10 +178,10 @@ export const WeeklyBarChart: React.FC<WeeklyBarChartProps> = ({ settings }) => {
                   )}
 
                   <div
-                    style={{ height: `${heightPercent}%` }}
+                    style={{ height: day.total === 0 ? "3px" : `${heightPercent}%` }}
                     className={`relative w-full max-w-[20px] sm:max-w-[26px] rounded-t-md transition-all duration-150 ${
                       day.total === 0
-                        ? "bg-emerald-950/40 border border-emerald-900/30 group-hover:bg-emerald-900/40"
+                        ? "bg-[#222222] border-t border-[#333333] group-hover:bg-[#2A2A2A]"
                         : "bg-gradient-to-t from-emerald-600 via-emerald-500 to-emerald-400 shadow-sm shadow-emerald-500/25 hover:brightness-110"
                     } ${
                       isSelected

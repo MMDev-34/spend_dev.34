@@ -6,7 +6,7 @@ import { TopBar } from "@/components/navigation/TopBar";
 import { Toast } from "@/components/common/Toast";
 import { OfflineIndicator } from "@/components/common/OfflineIndicator";
 import { FirestoreRulesBanner } from "@/components/common/FirestoreRulesBanner";
-import { AddTransactionModal } from "@/components/transaction/AddTransactionModal";
+import { AddPaymentModal } from "@/components/transaction/AddPaymentModal";
 import { WebhookInboxModal } from "@/components/inbox/WebhookInboxModal";
 import { ProfileModal } from "@/components/navigation/ProfileModal";
 import { HelpModal } from "@/components/navigation/HelpModal";
@@ -70,8 +70,8 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       {/* Mobile Bottom Navigation */}
       <BottomNav />
 
-      {/* Global Add / Edit Transaction Sheet */}
-      <AddTransactionModal />
+      {/* New Payment / Transaction Popup (Custom Keypad & Date Strip) */}
+      <AddPaymentModal />
 
       {/* Webhook Inbox Modal */}
       <WebhookInboxModal />

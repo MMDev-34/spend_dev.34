@@ -55,8 +55,8 @@
         },
         "type": {
           "type": "string",
-          "description": "Transaction type (expense or income)",
-          "enum": ["expense", "income"]
+          "description": "Transaction type (expense, income, or transfer)",
+          "enum": ["expense", "income", "transfer"]
         },
         "amount": {
           "type": "number",
@@ -90,6 +90,11 @@
         "isUnwanted": {
           "type": "boolean",
           "description": "Optional flag for impulse or unwanted spend"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Optional tag, e.g. transfer",
+          "maxLength": 64
         },
         "updatedAt": {
           "type": "string",

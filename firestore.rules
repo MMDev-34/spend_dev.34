@@ -43,16 +43,17 @@ service cloud.firestore {
 
     function isValidTransaction(data) {
       return data.keys().hasAll(['id', 'userId', 'type', 'amount', 'categoryId', 'date']) &&
-        data.keys().hasOnly(['id', 'userId', 'type', 'amount', 'categoryId', 'date', 'note', 'paymentMethod', 'isUnwanted', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'userId', 'type', 'amount', 'categoryId', 'date', 'note', 'paymentMethod', 'isUnwanted', 'tag', 'createdAt', 'updatedAt']) &&
         data.id is string && data.id.size() <= 128 &&
         data.userId == request.auth.uid &&
-        (data.type == 'expense' || data.type == 'income') &&
+        (data.type == 'expense' || data.type == 'income' || data.type == 'transfer') &&
         data.amount is number && data.amount >= 0 &&
         data.categoryId is string && data.categoryId.size() <= 128 &&
         data.date is string && data.date.size() <= 32 &&
         (!('note' in data) || (data.note is string && data.note.size() <= 512)) &&
         (!('paymentMethod' in data) || (data.paymentMethod is string && data.paymentMethod.size() <= 64)) &&
-        (!('isUnwanted' in data) || data.isUnwanted is bool);
+        (!('isUnwanted' in data) || data.isUnwanted is bool) &&
+        (!('tag' in data) || (data.tag is string && data.tag.size() <= 64));
     }
 
     function isValidCategory(data) {

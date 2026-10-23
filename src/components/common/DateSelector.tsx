@@ -6,7 +6,7 @@ import {
   X,
   Check
 } from "lucide-react";
-import { getToday, formatDateButtonLabel } from "@/utils/dates";
+import { getToday, formatDateButtonLabel, formatDateShort } from "@/utils/dates";
 
 interface DateSelectorProps {
   value: string; // YYYY-MM-DD
@@ -15,6 +15,8 @@ interface DateSelectorProps {
   showSteppers?: boolean;
   align?: "left" | "center" | "right";
   placeholder?: string;
+  maxDate?: string;
+  displayFormat?: "standard" | "short";
 }
 
 const MONTH_NAMES = [
@@ -31,6 +33,8 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
   showSteppers = true,
   align = "left",
   placeholder = "Select Date",
+  maxDate,
+  displayFormat = "standard",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,7 +90,11 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
       const y = target.getFullYear();
       const m = String(target.getMonth() + 1).padStart(2, "0");
       const d = String(target.getDate()).padStart(2, "0");
-      onChange(`${y}-${m}-${d}`);
+      const targetStr = `${y}-${m}-${d}`;
+      if (maxDate && targetStr > maxDate) {
+        return;
+      }
+      onChange(targetStr);
     } catch {
       onChange(getToday());
     }
@@ -117,7 +125,9 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
     const y = target.getFullYear();
     const m = String(target.getMonth() + 1).padStart(2, "0");
     const d = String(target.getDate()).padStart(2, "0");
-    onChange(`${y}-${m}-${d}`);
+    const targetStr = `${y}-${m}-${d}`;
+    if (maxDate && targetStr > maxDate) return;
+    onChange(targetStr);
     setIsOpen(false);
   };
 
@@ -129,7 +139,9 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
     const y = target.getFullYear();
     const m = String(target.getMonth() + 1).padStart(2, "0");
     const d = String(target.getDate()).padStart(2, "0");
-    onChange(`${y}-${m}-${d}`);
+    const targetStr = `${y}-${m}-${d}`;
+    if (maxDate && targetStr > maxDate) return;
+    onChange(targetStr);
     setIsOpen(false);
   };
 
@@ -141,16 +153,22 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
   const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate();
 
   const todayStr = getToday();
+  const isAtMaxDate = Boolean(maxDate && value >= maxDate);
+  const displayLabel = value
+    ? displayFormat === "short"
+      ? formatDateShort(value)
+      : formatDateButtonLabel(value)
+    : placeholder;
 
   return (
     <div ref={containerRef} className={`relative select-none ${className}`}>
-      {/* Date Bar */}
-      <div className="flex items-center justify-between gap-1 bg-[#1C1C1C] border border-[#262626] rounded-xl p-1 text-xs text-[#F5F5F5] hover:border-neutral-700 transition">
+      {/* Date Bar - exact 30px height */}
+      <div className="h-[30px] flex items-center justify-between gap-0.5 bg-[#1C1C1C] border border-[#262626] rounded-xl px-1 text-xs text-[#F5F5F5] hover:border-neutral-700 transition">
         {showSteppers && (
           <button
             type="button"
             onClick={(e) => changeDateByDays(-1, e)}
-            className="p-1.5 rounded-lg text-[#A1A1AA] hover:text-[#F5F5F5] hover:bg-[#262626] active:scale-90 transition cursor-pointer shrink-0"
+            className="w-5 h-5 flex items-center justify-center rounded-md text-[#A1A1AA] hover:text-[#F5F5F5] hover:bg-[#262626] active:scale-90 transition cursor-pointer shrink-0"
             title="Previous Day"
             aria-label="Previous Day"
           >
@@ -162,21 +180,26 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          className="flex-1 min-w-0 py-1.5 px-2 rounded-lg text-xs font-semibold text-[#F5F5F5] hover:bg-[#262626] transition flex items-center justify-center gap-1.5 cursor-pointer truncate"
+          className="flex-1 min-w-0 h-full py-0 px-1.5 rounded-lg text-xs font-semibold text-[#F5F5F5] hover:bg-[#262626] transition flex items-center justify-center gap-1.5 cursor-pointer truncate"
           title="Click to select date"
           aria-label="Toggle calendar"
           aria-expanded={isOpen}
         >
-          <CalendarIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span className="truncate">{value ? formatDateButtonLabel(value) : placeholder}</span>
+          <CalendarIcon className="w-3 h-3 text-emerald-400 shrink-0" />
+          <span className="truncate">{displayLabel}</span>
         </button>
 
         {showSteppers && (
           <button
             type="button"
+            disabled={isAtMaxDate}
             onClick={(e) => changeDateByDays(1, e)}
-            className="p-1.5 rounded-lg text-[#A1A1AA] hover:text-[#F5F5F5] hover:bg-[#262626] active:scale-90 transition cursor-pointer shrink-0"
-            title="Next Day"
+            className={`w-5 h-5 flex items-center justify-center rounded-md transition shrink-0 ${
+              isAtMaxDate
+                ? "text-neutral-600 opacity-25 cursor-not-allowed"
+                : "text-[#A1A1AA] hover:text-[#F5F5F5] hover:bg-[#262626] active:scale-90 cursor-pointer"
+            }`}
+            title={isAtMaxDate ? "Cannot select future date" : "Next Day"}
             aria-label="Next Day"
           >
             <ChevronRight className="w-3.5 h-3.5" />
@@ -184,37 +207,64 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
         )}
       </div>
 
-      {/* Calendar Popover */}
+      {/* Calendar Popover - centered over middle for clear visibility */}
       {isOpen && (
-        <div 
-          className={`absolute top-full mt-1.5 z-50 w-72 bg-[#171717] border border-[#2E2E2E] rounded-2xl shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150 ${
-            align === "right" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0"
-          }`}
-        >
-          {/* Quick Shortcuts */}
-          <div className="flex items-center justify-between gap-1.5 pb-2.5 mb-2 border-b border-[#262626]">
-            <button
-              type="button"
-              onClick={(e) => handleSetRelative("yesterday", e)}
-              className="flex-1 py-1 rounded-lg text-[11px] font-medium text-[#A1A1AA] hover:text-[#F5F5F5] bg-[#222222] hover:bg-[#2A2A2A] border border-[#2C2C2C] transition text-center cursor-pointer"
-            >
-              Yesterday
-            </button>
-            <button
-              type="button"
-              onClick={(e) => handleSetRelative("today", e)}
-              className="flex-1 py-1 rounded-lg text-[11px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition text-center cursor-pointer"
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={(e) => handleSetRelative("tomorrow", e)}
-              className="flex-1 py-1 rounded-lg text-[11px] font-medium text-[#A1A1AA] hover:text-[#F5F5F5] bg-[#222222] hover:bg-[#2A2A2A] border border-[#2C2C2C] transition text-center cursor-pointer"
-            >
-              Tomorrow
-            </button>
-          </div>
+        <>
+          {/* Mobile backdrop */}
+          <div
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs sm:hidden animate-in fade-in duration-150"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(false);
+            }}
+          />
+          <div 
+            className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:translate-y-0 sm:absolute sm:top-full sm:mt-2 z-50 w-[300px] max-w-[calc(100vw-32px)] bg-[#171717] border border-[#2E2E2E] rounded-2xl shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150 ${
+              align === "right" ? "sm:right-0 sm:left-auto sm:translate-x-0" : align === "left" ? "sm:left-0 sm:translate-x-0" : "sm:left-1/2 sm:-translate-x-1/2"
+            }`}
+          >
+            {/* Header with Title and Close on mobile */}
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#262626] sm:hidden">
+              <span className="text-xs font-semibold text-[#A1A1AA]">Select Date</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                }}
+                className="p-1 rounded-lg text-[#71717A] hover:text-white hover:bg-neutral-800 transition"
+                aria-label="Close calendar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick Shortcuts */}
+            <div className="flex items-center justify-between gap-1.5 pb-2.5 mb-2 border-b border-[#262626]">
+              <button
+                type="button"
+                onClick={(e) => handleSetRelative("yesterday", e)}
+                className="flex-1 py-1 rounded-lg text-[11px] font-medium text-[#A1A1AA] hover:text-[#F5F5F5] bg-[#222222] hover:bg-[#2A2A2A] border border-[#2C2C2C] transition text-center cursor-pointer"
+              >
+                Yesterday
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleSetRelative("today", e)}
+                className="flex-1 py-1 rounded-lg text-[11px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition text-center cursor-pointer"
+              >
+                Today
+              </button>
+              {(!maxDate || todayStr < maxDate) && (
+                <button
+                  type="button"
+                  onClick={(e) => handleSetRelative("tomorrow", e)}
+                  className="flex-1 py-1 rounded-lg text-[11px] font-medium text-[#A1A1AA] hover:text-[#F5F5F5] bg-[#222222] hover:bg-[#2A2A2A] border border-[#2C2C2C] transition text-center cursor-pointer"
+                >
+                  Tomorrow
+                </button>
+              )}
+            </div>
 
           {/* Month & Year Navigation Header */}
           <div className="flex items-center justify-between px-1 mb-2">
@@ -255,12 +305,21 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
             {/* Prev month days */}
             {Array.from({ length: startingDayIndex }).map((_, i) => {
               const dayNum = daysInPrevMonth - startingDayIndex + i + 1;
+              const prevDate = new Date(viewYear, viewMonth - 1, dayNum);
+              const prevKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}-${String(prevDate.getDate()).padStart(2, "0")}`;
+              const isPrevFuture = Boolean(maxDate && prevKey > maxDate);
+
               return (
                 <button
                   key={`prev-${i}`}
                   type="button"
+                  disabled={isPrevFuture}
                   onClick={() => handleSelectDay(dayNum, -1)}
-                  className="h-8 rounded-lg text-xs text-[#52525B] hover:text-[#A1A1AA] hover:bg-[#222222] transition flex items-center justify-center cursor-pointer"
+                  className={`h-8 rounded-lg text-xs transition flex items-center justify-center ${
+                    isPrevFuture 
+                      ? "text-[#3F3F46] opacity-30 cursor-not-allowed" 
+                      : "text-[#52525B] hover:text-[#A1A1AA] hover:bg-[#222222] cursor-pointer"
+                  }`}
                 >
                   {dayNum}
                 </button>
@@ -273,18 +332,22 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
               const dateKey = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
               const isSelected = dateKey === value;
               const isToday = dateKey === todayStr;
+              const isFuture = Boolean(maxDate && dateKey > maxDate);
 
               return (
                 <button
                   key={`cur-${dayNum}`}
                   type="button"
+                  disabled={isFuture}
                   onClick={() => handleSelectDay(dayNum, 0)}
-                  className={`h-8 rounded-lg text-xs font-medium transition flex flex-col items-center justify-center relative cursor-pointer ${
-                    isSelected
-                      ? "bg-emerald-500 text-black font-bold shadow-md shadow-emerald-950/30"
+                  className={`h-8 rounded-lg text-xs font-medium transition flex flex-col items-center justify-center relative ${
+                    isFuture
+                      ? "text-neutral-700 opacity-25 cursor-not-allowed"
+                      : isSelected
+                      ? "bg-emerald-500 text-black font-bold shadow-md shadow-emerald-950/30 cursor-pointer"
                       : isToday
-                      ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
-                      : "text-[#E4E4E7] hover:bg-[#262626] hover:text-white"
+                      ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 cursor-pointer"
+                      : "text-[#E4E4E7] hover:bg-[#262626] hover:text-white cursor-pointer"
                   }`}
                 >
                   <span>{dayNum}</span>
@@ -313,7 +376,8 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
             })}
           </div>
         </div>
-      )}
+      </>
+    )}
     </div>
   );
 };

@@ -1,78 +1,85 @@
-# Cash Flow Trend - Unwanted Amount on Toggle & 50/50 Spent/Earned Blocks
+# Implementation Plan - Record Transfers / Lent Amounts as Expenses with 'Transfer' Tag
 
-Integrate the unwanted money amount directly inside the compact On/Off toggle button, freeing up horizontal space on the header so that Spent and Earned share the remaining width in a balanced 50/50 split where digits are never hidden or truncated.
+Treat transfers and money lent to others as **expenses** with a dedicated **Transfer** tag. This ensures they are automatically counted in total spending and deducted from balance while preserving the visual identity and ledger tracking of a transfer.
 
-## User Review & Critical Decisions
-
-> [!IMPORTANT]
-> The following choices were confirmed in Phase 1:
-> - **Toggle Button Content when ON**: Displays the Alert icon, formatted unwanted amount, and an active `ON` badge (e.g., `[ ⚠️ ₹140.00 · ON ]`).
-> - **Right-Side Summary Blocks**: Only two blocks (`Spent` and `Earned`) in an equal 50/50 split (`grid grid-cols-2` / `flex-1`), giving ample horizontal space so large amounts never get hidden.
-
----
-
-## 1. Overview & Core Concept
-
-- **The Problem**: Fitting 3 separate summary blocks (`Spent`, `Earned`, and `Unwanted`) on one line caused digits to get hidden or truncated on smaller mobile viewports.
-- **The Solution**:
-  - Move the unwanted spend amount directly into the **ON/OFF toggle button** when toggled on.
-  - Dedicate the right-hand summary line exclusively to **Spent** and **Earned** in a balanced 50/50 layout.
-  - When the toggle is OFF, the toggle displays `[ ⚠️ Unwanted · OFF ]`. When turned ON, it expands to `[ ⚠️ ₹Amount · ON ]`.
+## User Requirements & Clarifications Confirmed
+1. **Expenses Calculation**: Transfers and lent amounts are categorized as expenses so they are counted in total spending, expense charts, and deducted from account balance.
+2. **Transfer Tag**: The underlying transaction record will have `type: "expense"` and `tag: "transfer"`.
+3. **Visual Badge**: Display a distinct "Transfer" badge/tag next to the category in transaction lists, feeds, and detail modals.
+4. **Borrow & Lend Integration**: When adding a "Lent" record from the Borrow & Lend page (`/borrow-lend`), also automatically record an expense transaction with `tag: "transfer"`.
+5. **Firebase Rules & Blueprint**: Update `firestore.rules` and `firebase-blueprint.json` to allow the optional `tag` field on transactions and deploy them.
 
 ---
 
-## 2. Layout & Component Architecture
+## Proposed Changes
 
-### Mobile & Desktop Header Diagram
+### 1. `src/types/transaction.ts`
+- Add optional `tag?: string` to the `Transaction` interface (e.g., `"transfer"`).
 
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                              CashFlowTrendChart Header                                 │
-├─────────────────────────────────────────────────┬──────────────────────────────────────┤
-│  LEFT CLUSTER (View Tabs + Unwanted Toggle)     │  RIGHT CLUSTER (50/50 Summary Blocks)│
-│                                                 │                                      │
-│  ┌───────────────┐  ┌────────────────────────┐  │  ┌────────────────┐┌────────────────┐│
-│  │ Trend | Paymt │  │ ⚠️  ₹140.00  ● ON       │  │  │ ● Spent:      ││ ● Earned:      ││
-│  └───────────────┘  └────────────────────────┘  │  │   ₹3,689.00    ││   ₹65,000.00   ││
-│                     (When OFF: [⚠️ Unwanted])   │  │   (50% Width)  ││   (50% Width)  ││
-│                                                 │  └────────────────┘└────────────────┘│
-└─────────────────────────────────────────────────┴──────────────────────────────────────┘
-```
+### 2. `src/components/transaction/AddPaymentModal.tsx`
+- In `handleSave`:
+  - When `type === "transfer"`:
+    - Save the transaction with `type: "expense"` and `tag: "transfer"`.
+    - Note will store the note text plus `(To: ContactName)`.
+    - Automatically create the active `Loan` with `direction: "lent"` in `appStore` (so it displays in the Lent tab of Borrow & Lend).
+    - Confirmation toast: `"Transfer recorded as expense & added to Lent"`.
+
+### 3. `src/pages/BorrowLend/BorrowLendPage.tsx`
+- In `handleCreateLoan`:
+  - When `direction === "lent"`:
+    - In addition to creating the loan, automatically call `addTransaction` with:
+      - `type: "expense"`
+      - `tag: "transfer"`
+      - `amount: amount`
+      - `categoryId: defaultExpenseCategory`
+      - `date: startDate || getToday()`
+      - `note: "Lent to [ContactName]"`
+      - `paymentMethod: "upi"`
+
+### 4. Transaction Displays (`TransactionsPage.tsx` & `TransactionDetailsModal.tsx`)
+- In `TransactionsPage.tsx`:
+  - Render a styled sky-blue `<span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 font-bold shrink-0">Transfer</span>` badge beside the category name for transactions with `t.tag === "transfer"`.
+  - When editing a transaction with `tag === "transfer"`, open `AddPaymentModal` with the "Transfer" tab pre-selected.
+- In `TransactionDetailsModal.tsx`:
+  - Render the "Transfer" badge alongside the "Expense" badge in the hero header.
+
+### 5. Firebase Blueprint & Security Rules
+- In `firebase-blueprint.json`:
+  - Add `tag` property (`type: "string"`, `maxLength: 64`) to `Transaction` entity.
+- In `firestore.rules`:
+  - Include `'tag'` in `isValidTransaction` allowed keys: `data.keys().hasOnly([... 'tag', ...])`.
+  - Add validation: `(!('tag' in data) || (data.tag is string && data.tag.size() <= 64))`.
+- Deploy the updated rules to Firebase via `deploy_firebase`.
+
+### 6. Transfer Category Configuration in 'New Transaction' Modal
+- Add canonical default system category `cat-transfer` ("Transfer", icon `🔄`, color `#0EA5E9`, type `"both"`, `isDefault: true`) to `DEFAULT_CATEGORIES` in `src/lib/constants.ts`.
+- Ensure `storage.loadState` automatically populates the `cat-transfer` default category if not present in cached storage.
+- In `src/components/transaction/AddPaymentModal.tsx`:
+  - When opening in or switching to the "Transfer" tab, immediately lock and pre-select the category to "Transfer" (`cat-transfer`).
+  - In the Category dropdown selector, clearly display the category as "Transfer" (with `🔄` icon, name "Transfer", and a "Set to Transfer" indicator badge), disabling unintended category changes.
+  - When switching back to "Expense" or "Income", gracefully switch back to standard valid categories for that type.
+  - On submit, ensure transactions logged under the Transfer tab save with the Transfer category ID.
+- In `src/pages/BorrowLend/BorrowLendPage.tsx`:
+  - When auto-logging an expense transaction for a lent loan, assign the Transfer category.
 
 ---
 
-## 3. User Experience & Visual Details
+## Verification Plan
 
-1. **Unwanted Toggle States**:
-   - **OFF State**:
-     - Background: `#181818`, border `#262626`, muted gray text.
-     - Content: Alert icon + "Unwanted" + muted dot + "OFF" label.
-   - **ON State**:
-     - Background: `bg-amber-500/15`, border `border-amber-500/40`, bright amber text.
-     - Content: Alert icon + formatted amount (e.g., `₹140.00` in tabular font) + pulsing amber dot + "ON" pill.
-     - Zero unread/unwanted state: If `totalUnwanted === 0`, displays `[ ⚠️ ₹0 · ON ]`.
+### Automated Verification
+1. Run `lint_applet` to confirm zero TypeScript compilation or linting errors. (Passed)
+2. Run `compile_applet` to ensure full Vite build success. (Passed)
+3. Deploy updated Firestore rules and verify success. (Passed)
 
-2. **50/50 Equal-Width Spent & Earned Blocks**:
-   - Both blocks receive equal `flex-1` width on mobile and desktop.
-   - Generous digit allowance: Since space is split between only 2 blocks, currency amounts up to 10–12 digits fit comfortably without truncation or ellipsis.
-   - High contrast dots: Red dot for Spent (`bg-rose-500`), Blue dot for Earned (`bg-blue-500`).
-
----
-
-## 4. Technical Implementation Steps
-
-### `src/components/overview/CashFlowTrendChart.tsx`
-1. **Unwanted Toggle Update**:
-   - When `showUnwanted` is active, render `unwantedFormatted` alongside the alert icon and ON badge.
-2. **Summary Blocks Refactoring**:
-   - Remove the third Unwanted block from the right-hand stats cluster.
-   - Style Spent and Earned with `grid grid-cols-2 gap-1.5 w-full sm:w-auto sm:flex` with equal `flex-1 min-w-0` width.
-   - Keep dynamic font scaling (`text-xs sm:text-sm`) for tabular numerals.
-
----
-
-## 5. Verification Plan
-
-- Run `lint_applet` to ensure zero TypeScript errors.
-- Run `compile_applet` to verify production build.
-- Verify toggle state changes between OFF and ON, ensuring the amount appears directly on the button and Spent/Earned never clip digits.
+### Manual / Browser Verification
+1. **New Transaction modal -> Transfer tab**:
+   - Verify category field is set to "Transfer" with icon `🔄` and "Set to Transfer" indicator.
+   - Enter amount and recipient name ("Alex").
+   - Save transfer.
+   - Verify transfer transaction is saved under category "Transfer" with the sky-blue "Transfer" badge.
+   - Verify the lent loan appears in the Lent tab of Borrow & Lend.
+2. **Tab Switching**:
+   - Open modal: defaults to Expense with standard expense category (e.g. Food).
+   - Click "Transfer": category immediately sets to "Transfer".
+   - Click "Income": category switches to an income category (e.g. Salary).
+   - Click "Transfer": category sets back to "Transfer".

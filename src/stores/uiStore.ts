@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { Transaction } from "@/types/transaction";
+import { Transaction, TransactionType } from "@/types/transaction";
 
 export interface ToastAction {
   label: string;
@@ -16,7 +16,7 @@ export interface ToastMessage {
 interface UIState {
   // Navigation & Modals
   isAddModalOpen: boolean;
-  addModalInitialType: "expense" | "income";
+  addModalInitialType: TransactionType;
   addModalPrefill: Partial<Transaction> | null;
   selectedMonth: string; // YYYY-MM
   activityDateFilter: string | null;
@@ -33,7 +33,7 @@ interface UIState {
   hasFirestorePermissionError: boolean;
 
   // Actions
-  openAddModal: (type?: "expense" | "income", prefill?: Partial<Transaction> | null) => void;
+  openAddModal: (type?: TransactionType, prefill?: Partial<Transaction> | null) => void;
   closeAddModal: () => void;
   setSelectedMonth: (monthKey: string) => void;
   setActivityDateFilter: (date: string | null) => void;
@@ -79,7 +79,7 @@ export const useUIStore = create<UIState>((set) => {
     openAddModal: (type = "expense", prefill = null) => {
       set({
         isAddModalOpen: true,
-        addModalInitialType: type,
+        addModalInitialType: type as any,
         addModalPrefill: prefill,
       });
     },

@@ -1,4 +1,4 @@
-export type TransactionType = "expense" | "income";
+export type TransactionType = "expense" | "income" | "transfer";
 
 export interface Transaction {
   id: string;
@@ -9,6 +9,7 @@ export interface Transaction {
   note?: string;
   paymentMethod?: string;
   isUnwanted?: boolean; // Flag for unwanted / impulse spend
+  tag?: string; // Optional tag, e.g. "transfer"
   createdAt: string;
   updatedAt: string;
 }

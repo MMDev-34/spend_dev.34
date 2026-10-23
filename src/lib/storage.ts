@@ -1,5 +1,5 @@
 import { SpendState } from "@/types/settings";
-import { APP_STORAGE_KEY, CURRENT_STATE_VERSION, INITIAL_STATE } from "./constants";
+import { APP_STORAGE_KEY, CURRENT_STATE_VERSION, DEFAULT_CATEGORIES, INITIAL_STATE } from "./constants";
 
 export function getStorageKey(userId?: string | null): string {
   if (userId && userId.trim()) {
@@ -73,13 +73,22 @@ export const storage = {
         return migrated;
       }
 
+      const loadedCategories =
+        Array.isArray(parsed.categories) && parsed.categories.length > 0
+          ? [...parsed.categories]
+          : [...INITIAL_STATE.categories];
+
+      if (!loadedCategories.some((c: any) => c.id === "cat-transfer" || (c.name && c.name.toLowerCase() === "transfer"))) {
+        const transferDef = DEFAULT_CATEGORIES.find((c) => c.id === "cat-transfer");
+        if (transferDef) {
+          loadedCategories.push(transferDef);
+        }
+      }
+
       return {
         version: CURRENT_STATE_VERSION,
         transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
-        categories:
-          Array.isArray(parsed.categories) && parsed.categories.length > 0
-            ? parsed.categories
-            : INITIAL_STATE.categories,
+        categories: loadedCategories,
         people: Array.isArray(parsed.people) ? parsed.people : [],
         loans: Array.isArray(parsed.loans) ? parsed.loans : [],
         categoryBudgets: Array.isArray(parsed.categoryBudgets) ? parsed.categoryBudgets : [],
