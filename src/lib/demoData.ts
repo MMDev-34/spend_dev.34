@@ -99,6 +99,30 @@ export function generateSampleData() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
+    {
+      id: "tx-loan-demo-loan-1",
+      type: "expense",
+      tag: "transfer",
+      amount: 120000,
+      categoryId: "cat-transfer",
+      date: getDateOffset(-6),
+      note: "Concert tickets booking (Lent to: Rahul Mehta)",
+      paymentMethod: "upi",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: "tx-loan-demo-loan-2",
+      type: "income",
+      tag: "transfer",
+      amount: 45000,
+      categoryId: "cat-transfer",
+      date: getDateOffset(-2),
+      note: "Split Uber ride (Borrowed from: Sarah Jenkins)",
+      paymentMethod: "upi",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
   ];
 
   const samplePeople: Person[] = [

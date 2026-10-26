@@ -23,6 +23,7 @@ import { CategoryDonutSection, CategoryChartItem } from "@/components/overview/C
 import { CashFlowTrendChart, CashFlowDataPoint } from "@/components/overview/CashFlowTrendChart";
 import { FiveMonthExpenseChart, MonthExpenseItem } from "@/components/overview/FiveMonthExpenseChart";
 import { PeakExpenseDaysChart, PeakDayItem } from "@/components/overview/PeakExpenseDaysChart";
+import { isRealExpense, isRealIncome } from "@/utils/transactionClassification";
 
 type TimeScopeType = "month" | "last3" | "all";
 
@@ -173,11 +174,11 @@ export const OverviewPage: React.FC = () => {
     const expList: typeof transactions = [];
 
     for (const t of scopedTransactions) {
-      if (t.type === "expense") {
+      if (isRealExpense(t)) {
         exp += t.amount;
         if (t.isUnwanted) unw += t.amount;
         expList.push(t);
-      } else {
+      } else if (isRealIncome(t)) {
         inc += t.amount;
       }
     }
@@ -265,10 +266,10 @@ export const OverviewPage: React.FC = () => {
       for (const t of scopedTransactions) {
         if (!t.date) continue;
         const cur = map.get(t.date) || { spending: 0, earning: 0, unwanted: 0 };
-        if (t.type === "expense") {
+        if (isRealExpense(t)) {
           cur.spending += t.amount;
           if (t.isUnwanted) cur.unwanted += t.amount;
-        } else if (t.type === "income") {
+        } else if (isRealIncome(t)) {
           cur.earning += t.amount;
         }
         map.set(t.date, cur);
@@ -314,10 +315,10 @@ export const OverviewPage: React.FC = () => {
       if (!t.date) continue;
       const monthKey = t.date.slice(0, 7);
       const cur = monthMap.get(monthKey) || { spending: 0, earning: 0, unwanted: 0 };
-      if (t.type === "expense") {
+      if (isRealExpense(t)) {
         cur.spending += t.amount;
         if (t.isUnwanted) cur.unwanted += t.amount;
-      } else if (t.type === "income") {
+      } else if (isRealIncome(t)) {
         cur.earning += t.amount;
       }
       monthMap.set(monthKey, cur);
@@ -399,8 +400,8 @@ export const OverviewPage: React.FC = () => {
       const label = `${moShort} '${yrShort}`;
 
       const mTransactions = transactions.filter((t) => t.date && t.date.startsWith(key));
-      const exp = mTransactions.filter((t) => t.type === "expense").reduce((acc, t) => acc + t.amount, 0);
-      const inc = mTransactions.filter((t) => t.type === "income").reduce((acc, t) => acc + t.amount, 0);
+      const exp = mTransactions.filter((t) => isRealExpense(t)).reduce((acc, t) => acc + t.amount, 0);
+      const inc = mTransactions.filter((t) => isRealIncome(t)).reduce((acc, t) => acc + t.amount, 0);
 
       monthsList.push({
         monthKey: key,
@@ -432,7 +433,7 @@ export const OverviewPage: React.FC = () => {
     const dayMap = new Map<string, { total: number; transactions: typeof transactions }>();
 
     for (const t of scopedTransactions) {
-      if (t.type === "expense" && t.date) {
+      if (isRealExpense(t) && t.date) {
         const cur = dayMap.get(t.date) || { total: 0, transactions: [] };
         cur.total += t.amount;
         cur.transactions.push(t);
@@ -489,12 +490,12 @@ export const OverviewPage: React.FC = () => {
     const incomeByDay = new Map<string, { total: number; transactions: typeof transactions }>();
 
     for (const t of scopedTransactions) {
-      if (t.type === "expense") {
+      if (isRealExpense(t)) {
         const cur = expenseByDay.get(t.date) || { total: 0, transactions: [] };
         cur.total += t.amount;
         cur.transactions.push(t);
         expenseByDay.set(t.date, cur);
-      } else if (t.type === "income") {
+      } else if (isRealIncome(t)) {
         const cur = incomeByDay.get(t.date) || { total: 0, transactions: [] };
         cur.total += t.amount;
         cur.transactions.push(t);
@@ -528,7 +529,7 @@ export const OverviewPage: React.FC = () => {
 
     const expenseDatesSet = new Set<string>();
     for (const t of scopedTransactions) {
-      if (t.type === "expense" && t.date) {
+      if (isRealExpense(t) && t.date) {
         expenseDatesSet.add(t.date);
       }
     }

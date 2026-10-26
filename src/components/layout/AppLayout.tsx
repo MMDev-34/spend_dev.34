@@ -54,7 +54,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       <div className="flex-1 flex flex-col min-w-0 pb-20 md:pb-6">
         <TopBar />
         
-        <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-4 md:py-6">
+        <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-4 md:py-6">
           {hasFirestorePermissionError && (
             <div className="mb-4">
               <FirestoreRulesBanner onDismiss={dismissFirestorePermissionError} />

@@ -271,3 +271,15 @@ export function getUpcomingDueDate(
     isPastDue,
   };
 }
+
+/**
+ * Formats YYYY-MM-DD to short month & day (e.g. "Oct 28")
+ */
+export function formatShortDate(dateStr: string): string {
+  if (!dateStr || typeof dateStr !== "string") return "";
+  const parts = dateStr.split("-").map(Number);
+  if (parts.length < 3 || parts.some(isNaN)) return dateStr;
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}

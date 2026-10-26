@@ -3,10 +3,18 @@ import { useAppStore } from "@/stores/appStore";
 import { useUIStore } from "@/stores/uiStore";
 import { formatMoney } from "@/utils/currency";
 import { getToday } from "@/utils/dates";
-import { Transaction, TransactionType } from "@/types/transaction";
+import { Transaction } from "@/types/transaction";
 import { TransactionDetailsModal } from "@/components/transaction/TransactionDetailsModal";
+import { TransactionDetailView } from "@/components/transaction/TransactionDetailView";
 import { ExportCsvModal } from "@/components/transaction/ExportCsvModal";
 import { ConfirmDeleteTransactionModal } from "@/components/transaction/ConfirmDeleteTransactionModal";
+import { DatePeriodDropdown, DatePeriodValue } from "@/components/transaction/DatePeriodDropdown";
+import { 
+  AdvancedFilterDrawer, 
+  AdvancedFilterState, 
+  DEFAULT_FILTER_STATE 
+} from "@/components/transaction/AdvancedFilterDrawer";
+import { ActiveFilterChips } from "@/components/transaction/ActiveFilterChips";
 import { 
   Search, 
   Plus, 
@@ -15,12 +23,16 @@ import {
   Edit2, 
   Download, 
   X,
-  FileSpreadsheet,
-  CalendarClock
+  SlidersHorizontal
 } from "lucide-react";
+import { 
+  isTransferOrLoan, 
+  isRealExpense, 
+  isRealIncome, 
+  getTransferOrLoanLabel 
+} from "@/utils/transactionClassification";
 
-type ScopeType = "month" | "last_month" | "all" | "custom";
-type TypeFilterType = "all" | "expense" | "income";
+type QuickTypeFilter = "all" | "expense" | "income" | "transfer";
 
 export const TransactionsPage: React.FC = () => {
   const transactions = useAppStore((s) => s.transactions);
@@ -37,26 +49,34 @@ export const TransactionsPage: React.FC = () => {
   const focusedTransactionId = useUIStore((s) => s.focusedTransactionId);
   const setFocusedTransactionId = useUIStore((s) => s.setFocusedTransactionId);
 
-  // Minimal filters state
+  // Search & Quick Type Filter
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<TypeFilterType>("all");
-  const [scope, setScope] = useState<ScopeType>("month");
-  const [customStartDate, setCustomStartDate] = useState<string>("");
-  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [typeFilter, setTypeFilter] = useState<QuickTypeFilter>("all");
+
+  // Single Unified Date Period Dropdown
+  const [datePeriod, setDatePeriod] = useState<DatePeriodValue>({
+    type: "this_month",
+  });
+
+  // Advanced Filter Drawer State
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilterState>(DEFAULT_FILTER_STATE);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
 
   // Auto-filter by clicked peak expense day from Overview
   useEffect(() => {
     if (activityDateFilter) {
-      setScope("custom");
-      setCustomStartDate(activityDateFilter);
-      setCustomEndDate(activityDateFilter);
+      setDatePeriod({
+        type: "custom",
+        customStartDate: activityDateFilter,
+        customEndDate: activityDateFilter,
+      });
       setActivityDateFilter(null);
     }
   }, [activityDateFilter, setActivityDateFilter]);
 
-  // Modals state
+  // Modals & In-page detail view state
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [mobileDetailTxId, setMobileDetailTxId] = useState<string | null>(null);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -71,49 +91,115 @@ export const TransactionsPage: React.FC = () => {
       if (target) {
         const currentMonthPrefix = new Date().toISOString().slice(0, 7);
         if (!target.date.startsWith(currentMonthPrefix)) {
-          setScope("all");
+          setDatePeriod({ type: "all_time" });
         }
-        setSelectedTransaction(target);
-        setIsDetailsModalOpen(true);
+        const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+        if (isMobile) {
+          setMobileDetailTxId(target.id);
+        } else {
+          setSelectedTransaction(target);
+          setIsDetailsModalOpen(true);
+        }
       }
       setFocusedTransactionId(null);
     }
   }, [focusedTransactionId, transactions, setFocusedTransactionId]);
 
-  // Filter & sort calculation (always sorted newest first)
+  // Compute active filters count for the Filter badge
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (advancedFilters.categoryIds.length > 0) count++;
+    if (advancedFilters.paymentMethods.length > 0) count++;
+    if (advancedFilters.minAmount || advancedFilters.maxAmount) count++;
+    if (advancedFilters.spendingFlag !== "all") count++;
+    if (advancedFilters.transferOption !== "include") count++;
+    if (advancedFilters.sortBy !== "newest") count++;
+    return count;
+  }, [advancedFilters]);
+
+  // Filter & sort calculation
   const filtered = useMemo(() => {
     let result = [...transactions];
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-indexed
 
-    // 1. Date Scope Filter
-    if (scope === "month") {
+    // 1. Date Period Filter
+    if (datePeriod.type === "this_month") {
       const currentMonthPrefix = `${currentYear}-${(currentMonth + 1).toString().padStart(2, "0")}`;
       result = result.filter((t) => t.date.startsWith(currentMonthPrefix));
-    } else if (scope === "last_month") {
+    } else if (datePeriod.type === "last_month") {
       const prevMonth = currentMonth === 0 ? 12 : currentMonth;
       const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
       const prevMonthPrefix = `${prevYear}-${prevMonth.toString().padStart(2, "0")}`;
       result = result.filter((t) => t.date.startsWith(prevMonthPrefix));
-    } else if (scope === "custom") {
-      if (customStartDate) {
-        result = result.filter((t) => t.date >= customStartDate);
+    } else if (datePeriod.type === "last_7_days") {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+      const sevenDaysAgoStr = `${sevenDaysAgo.getFullYear()}-${(sevenDaysAgo.getMonth() + 1).toString().padStart(2, "0")}-${sevenDaysAgo.getDate().toString().padStart(2, "0")}`;
+      result = result.filter((t) => t.date >= sevenDaysAgoStr && t.date <= todayStr);
+    } else if (datePeriod.type === "this_year") {
+      const currentYearPrefix = `${currentYear}-`;
+      result = result.filter((t) => t.date.startsWith(currentYearPrefix));
+    } else if (datePeriod.type === "custom") {
+      if (datePeriod.customStartDate) {
+        result = result.filter((t) => t.date >= datePeriod.customStartDate!);
       }
-      if (customEndDate) {
-        result = result.filter((t) => t.date <= customEndDate);
+      if (datePeriod.customEndDate) {
+        result = result.filter((t) => t.date <= datePeriod.customEndDate!);
       }
     }
-    // If scope === "all", keep all dates without filtering
+    // "all_time" keeps all dates
 
-    // 2. Type Filter (Expense / Income)
-    if (typeFilter !== "all") {
-      result = result.filter((t) => t.type === typeFilter);
+    // 2. Quick Type Filter (All / Expenses / Income / Transfer)
+    if (typeFilter === "expense") {
+      result = result.filter((t) => isRealExpense(t));
+    } else if (typeFilter === "income") {
+      result = result.filter((t) => isRealIncome(t));
+    } else if (typeFilter === "transfer") {
+      result = result.filter((t) => isTransferOrLoan(t));
     }
 
-    // 3. Category Filter
-    if (selectedCategory !== "all") {
-      result = result.filter((t) => t.categoryId === selectedCategory);
+    // 3. Advanced Drawer Filters
+    // Categories (Multi-select)
+    if (advancedFilters.categoryIds.length > 0) {
+      const catSet = new Set(advancedFilters.categoryIds);
+      result = result.filter((t) => catSet.has(t.categoryId));
+    }
+
+    // Payment Methods (Multi-select)
+    if (advancedFilters.paymentMethods.length > 0) {
+      const pmSet = new Set(advancedFilters.paymentMethods.map((p) => p.toLowerCase()));
+      result = result.filter((t) => {
+        const pm = (t.paymentMethod || "other").toLowerCase();
+        return pmSet.has(pm);
+      });
+    }
+
+    // Amount Range
+    if (advancedFilters.minAmount) {
+      const minMinor = parseFloat(advancedFilters.minAmount) * 100;
+      if (!isNaN(minMinor)) {
+        result = result.filter((t) => t.amount >= minMinor);
+      }
+    }
+    if (advancedFilters.maxAmount) {
+      const maxMinor = parseFloat(advancedFilters.maxAmount) * 100;
+      if (!isNaN(maxMinor)) {
+        result = result.filter((t) => t.amount <= maxMinor);
+      }
+    }
+
+    // Spending Flag
+    if (advancedFilters.spendingFlag === "unwanted_only") {
+      result = result.filter((t) => Boolean(t.isUnwanted));
+    }
+
+    // Transfer Filter Option
+    if (advancedFilters.transferOption === "exclude") {
+      result = result.filter((t) => !isTransferOrLoan(t));
+    } else if (advancedFilters.transferOption === "only") {
+      result = result.filter((t) => isTransferOrLoan(t));
     }
 
     // 4. Search query
@@ -127,19 +213,30 @@ export const TransactionsPage: React.FC = () => {
       });
     }
 
-    // Sort newest first
-    result.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+    // 5. Sorting
+    result.sort((a, b) => {
+      if (advancedFilters.sortBy === "oldest") {
+        return a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt);
+      }
+      if (advancedFilters.sortBy === "highest") {
+        return b.amount - a.amount || b.date.localeCompare(a.date);
+      }
+      if (advancedFilters.sortBy === "lowest") {
+        return a.amount - b.amount || a.date.localeCompare(b.date);
+      }
+      // Default: newest first
+      return b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
+    });
 
     return result;
   }, [
     transactions,
-    scope,
-    customStartDate,
-    customEndDate,
+    datePeriod,
     typeFilter,
-    selectedCategory,
+    advancedFilters,
     search,
     categoryMap,
+    todayStr,
   ]);
 
   // Group filtered transactions by Date for Day-by-Day Timeline
@@ -157,22 +254,25 @@ export const TransactionsPage: React.FC = () => {
       map.get(t.date)!.push(t);
     }
 
-    // Sort dates descending
-    const sortedDates = Array.from(map.keys()).sort((a, b) => b.localeCompare(a));
+    // Sort dates according to chosen sort order
+    const isOldestSort = advancedFilters.sortBy === "oldest";
+    const sortedDates = Array.from(map.keys()).sort((a, b) =>
+      isOldestSort ? a.localeCompare(b) : b.localeCompare(a)
+    );
 
     for (const d of sortedDates) {
       const items = map.get(d)!;
       let totalExpense = 0;
       let totalIncome = 0;
       for (const item of items) {
-        if (item.type === "expense") totalExpense += item.amount;
-        else totalIncome += item.amount;
+        if (isRealExpense(item)) totalExpense += item.amount;
+        else if (isRealIncome(item)) totalIncome += item.amount;
       }
       groups.push({ dateStr: d, items, totalExpense, totalIncome });
     }
 
     return groups;
-  }, [filtered]);
+  }, [filtered, advancedFilters.sortBy]);
 
   // Summary Metrics
   const summaryStats = useMemo(() => {
@@ -180,8 +280,8 @@ export const TransactionsPage: React.FC = () => {
     let totalInflow = 0;
 
     for (const t of filtered) {
-      if (t.type === "expense") totalOutflow += t.amount;
-      else totalInflow += t.amount;
+      if (isRealExpense(t)) totalOutflow += t.amount;
+      else if (isRealIncome(t)) totalInflow += t.amount;
     }
 
     return {
@@ -201,7 +301,7 @@ export const TransactionsPage: React.FC = () => {
     [summaryStats.totalInflow, settings.currency, settings.numberFormat]
   );
 
-  // Dynamic text size based on character / digit count so numbers never wrap into below line
+  // Dynamic text size based on digit count
   const amountTextSizeClass = useMemo(() => {
     const hasIncome = summaryStats.totalInflow > 0;
     const spentDigits = spentFormatted.length;
@@ -223,8 +323,13 @@ export const TransactionsPage: React.FC = () => {
 
   // Handlers
   const handleOpenDetails = (t: Transaction) => {
-    setSelectedTransaction(t);
-    setIsDetailsModalOpen(true);
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+    if (isMobile) {
+      setMobileDetailTxId(t.id);
+    } else {
+      setSelectedTransaction(t);
+      setIsDetailsModalOpen(true);
+    }
   };
 
   const handleDuplicate = (t: Transaction) => {
@@ -282,11 +387,29 @@ export const TransactionsPage: React.FC = () => {
     });
   };
 
+  // Dedicated In-page View for Mobile (Borrow & Lend architecture)
+  if (mobileDetailTxId) {
+    return (
+      <TransactionDetailView
+        transactionId={mobileDetailTxId}
+        categories={categories}
+        settings={settings}
+        onBack={() => setMobileDetailTxId(null)}
+        onEdit={(tx) => {
+          setMobileDetailTxId(null);
+          openAddModal(tx.tag === "transfer" ? "transfer" : tx.type, tx);
+        }}
+        onDuplicate={handleDuplicate}
+        onDelete={(tx) => handleExecuteDelete(tx)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
-      {/* 1. Minimal Clean Search & Action Bar */}
-      <div className="space-y-2.5 sm:space-y-3 bg-[#141414] border border-[#262626] rounded-xl sm:rounded-2xl p-2.5 sm:p-4 shadow-sm">
-        {/* Row 1: Search Input & Export to CSV Modal Trigger */}
+      {/* 1. Redesigned Premium Filter & Search Card */}
+      <div className="space-y-3 bg-[#141414] border border-[#262626] rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm">
+        {/* Row 1: Search Bar on top beside it Export CSV Button */}
         <div className="flex items-center gap-2 w-full min-w-0">
           <div className="flex-1 min-w-0 flex items-center gap-2 bg-[#1C1C1C] border border-[#262626] rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 focus-within:border-neutral-700 transition">
             <Search className="w-4 h-4 text-[#71717A] shrink-0" />
@@ -299,6 +422,7 @@ export const TransactionsPage: React.FC = () => {
             />
             {search && (
               <button 
+                type="button"
                 onClick={() => setSearch("")} 
                 className="text-[#71717A] hover:text-[#F5F5F5] shrink-0 p-0.5 cursor-pointer"
                 aria-label="Clear search"
@@ -309,8 +433,9 @@ export const TransactionsPage: React.FC = () => {
           </div>
 
           <button
+            type="button"
             onClick={() => setIsExportModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#222222] text-[#F5F5F5] border border-[#262626] text-xs font-semibold transition active:scale-95 shrink-0 cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1C1C1C] hover:bg-[#222222] text-[#F5F5F5] border border-[#262626] text-xs font-semibold transition active:scale-95 shrink-0 cursor-pointer"
             title="Export CSV"
             aria-label="Export to CSV"
           >
@@ -319,112 +444,78 @@ export const TransactionsPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Row 2: Type Filter Pills & Category Dropdown */}
-        <div className="flex items-center justify-between gap-2 w-full min-w-0">
-          {/* Type Segmented Switcher */}
-          <div className="flex items-center p-0.5 sm:p-1 bg-[#1C1C1C] rounded-lg sm:rounded-xl border border-[#262626] shrink-0">
-            {[
-              { id: "all", label: "All" },
-              { id: "expense", label: "Expenses" },
-              { id: "income", label: "Income" },
-            ].map((t) => (
+        {/* Row 2: Small Pills of All, Expenses, Income, Transfer */}
+        <div className="flex items-center p-0.5 sm:p-1 bg-[#1C1C1C] rounded-lg sm:rounded-xl border border-[#262626] w-fit">
+          {[
+            { id: "all" as QuickTypeFilter, label: "All" },
+            { id: "expense" as QuickTypeFilter, label: "Expenses" },
+            { id: "income" as QuickTypeFilter, label: "Income" },
+            { id: "transfer" as QuickTypeFilter, label: "Transfer" },
+          ].map((t) => {
+            const isSelected = typeFilter === t.id;
+            return (
               <button
                 key={t.id}
-                onClick={() => setTypeFilter(t.id as TypeFilterType)}
-                className={`px-2 sm:px-3 py-1 rounded-md sm:rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer ${
-                  typeFilter === t.id
+                type="button"
+                onClick={() => setTypeFilter(t.id)}
+                className={`px-2.5 sm:px-3 py-1 rounded-md sm:rounded-lg text-[11px] sm:text-xs font-semibold transition cursor-pointer select-none ${
+                  isSelected
                     ? t.id === "expense"
                       ? "bg-[#262626] text-rose-400 border border-[#383838]"
                       : t.id === "income"
                       ? "bg-[#262626] text-emerald-400 border border-[#383838]"
+                      : t.id === "transfer"
+                      ? "bg-[#262626] text-sky-400 border border-[#383838]"
                       : "bg-[#262626] text-[#F5F5F5] border border-[#383838]"
                     : "text-[#71717A] hover:text-[#F5F5F5]"
                 }`}
               >
                 {t.label}
               </button>
-            ))}
-          </div>
+            );
+          })}
+        </div>
 
-          {/* Category Dropdown Menu */}
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="bg-[#1C1C1C] border border-[#262626] text-[11px] sm:text-xs text-[#F5F5F5] rounded-lg sm:rounded-xl px-2 sm:px-2.5 py-1 sm:py-1.5 outline-none font-medium focus:border-neutral-700 cursor-pointer max-w-[125px] xs:max-w-[150px] sm:max-w-[200px] truncate shrink-0"
-            aria-label="Filter by category"
+        {/* Row 3: Select Date Calendar Button & Filter Button */}
+        <div className="flex items-center justify-between gap-2 w-full pt-0.5">
+          {/* Unified Date Period Dropdown */}
+          <DatePeriodDropdown
+            value={datePeriod}
+            onChange={setDatePeriod}
+          />
+
+          {/* Advanced Filter Drawer Trigger */}
+          <button
+            type="button"
+            onClick={() => setIsFilterDrawerOpen(true)}
+            className={`flex items-center gap-2 h-9 px-3 rounded-xl border text-xs font-semibold transition active:scale-[0.98] cursor-pointer shadow-sm select-none ${
+              activeFilterCount > 0
+                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/20"
+                : "bg-[#1C1C1C] hover:bg-[#222222] border-[#2D2D2D] hover:border-[#383838] text-[#F5F5F5]"
+            }`}
+            aria-label="Open advanced filter drawer"
           >
-            <option value="all">📦 All Categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.icon} {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Row 3: Date Scope */}
-        <div className="flex items-center gap-1 p-0.5 sm:p-1 bg-[#1C1C1C] rounded-lg sm:rounded-xl border border-[#262626] w-full overflow-x-auto">
-          {[
-            { id: "month", label: "This Month" },
-            { id: "last_month", label: "Last Month" },
-            { id: "all", label: "All Time" },
-            { id: "custom", label: "Custom" },
-          ].map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setScope(s.id as ScopeType)}
-              className={`flex-1 sm:flex-initial px-2 sm:px-2.5 py-1 rounded-md sm:rounded-lg text-[11px] sm:text-xs font-semibold transition whitespace-nowrap text-center cursor-pointer ${
-                scope === s.id
-                  ? "bg-[#262626] text-cyan-300 border border-[#383838]"
-                  : "text-[#71717A] hover:text-[#F5F5F5]"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Custom Date Range Row (Only when scope === "custom") */}
-        {scope === "custom" && (
-          <div className="p-2.5 sm:p-3 rounded-xl bg-[#1C1C1C] border border-[#262626] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 text-xs animate-in fade-in">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[#71717A] text-[11px]">From:</span>
-                <input
-                  type="date"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="bg-[#141414] border border-[#262626] text-[#F5F5F5] rounded-lg px-2 py-1 outline-none text-xs"
-                />
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-[#71717A] text-[11px]">To:</span>
-                <input
-                  type="date"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="bg-[#141414] border border-[#262626] text-[#F5F5F5] rounded-lg px-2 py-1 outline-none text-xs"
-                />
-              </div>
-            </div>
-
-            {(customStartDate || customEndDate) && (
-              <button
-                onClick={() => {
-                  setCustomStartDate("");
-                  setCustomEndDate("");
-                }}
-                className="text-xs text-rose-400 hover:underline self-end sm:self-auto cursor-pointer"
-              >
-                Clear Range
-              </button>
+            <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Filter</span>
+            {activeFilterCount > 0 && (
+              <span className="w-5 h-5 rounded-full bg-emerald-500 text-black text-[10px] font-extrabold flex items-center justify-center">
+                {activeFilterCount}
+              </span>
             )}
-          </div>
-        )}
+          </button>
+        </div>
+
+        {/* Row 4: Removable Active Filter Chips */}
+        <ActiveFilterChips
+          filters={advancedFilters}
+          onUpdateFilters={setAdvancedFilters}
+          onClearAll={() => setAdvancedFilters(DEFAULT_FILTER_STATE)}
+          categories={categories}
+          currencySymbol={settings.currency || "$"}
+        />
       </div>
 
-      {/* 2. Minimal, Single-Row Responsive Summary Strip */}
+      {/* 2. Single-Row Responsive Summary Strip */}
       <div className="flex items-center px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-[#141414] border border-[#262626] font-mono-num flex-nowrap whitespace-nowrap overflow-x-auto no-scrollbar gap-4 sm:gap-6">
         <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
           <span className="text-[10px] sm:text-xs text-[#71717A] shrink-0 font-sans">Spent:</span>
@@ -452,11 +543,26 @@ export const TransactionsPage: React.FC = () => {
           <div className="space-y-1">
             <h3 className="text-sm font-semibold text-[#F5F5F5]">No matching transactions found</h3>
             <p className="text-xs text-[#71717A] max-w-sm mx-auto">
-              Try adjusting your search query, date filter, or category dropdown.
+              Try adjusting your search query, date period, or filter criteria.
             </p>
           </div>
-          <div className="pt-2">
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+            {(activeFilterCount > 0 || search || typeFilter !== "all" || datePeriod.type !== "this_month") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  setTypeFilter("all");
+                  setDatePeriod({ type: "this_month" });
+                  setAdvancedFilters(DEFAULT_FILTER_STATE);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1C1C1C] hover:bg-[#252525] border border-[#2D2D2D] text-[#D4D4D8] text-xs font-semibold transition"
+              >
+                Reset All Filters
+              </button>
+            )}
             <button
+              type="button"
               onClick={() => openAddModal("expense")}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold transition active:scale-95 shadow-md shadow-emerald-950/20"
             >
@@ -501,7 +607,9 @@ export const TransactionsPage: React.FC = () => {
                 <div className="rounded-2xl bg-[#141414] border border-[#262626] divide-y divide-[#262626] overflow-hidden shadow-sm">
                   {group.items.map((t) => {
                     const cat = categoryMap.get(t.categoryId);
-                    const isExpense = t.type === "expense";
+                    const transferOrLoan = isTransferOrLoan(t);
+                    const transferLabel = getTransferOrLoanLabel(t);
+                    const isExpense = isRealExpense(t);
 
                     return (
                       <div
@@ -521,28 +629,21 @@ export const TransactionsPage: React.FC = () => {
                               <span className="text-xs sm:text-sm font-semibold text-[#F5F5F5] truncate group-hover:text-emerald-400 transition-colors">
                                 {cat?.name || "General"}
                               </span>
-                              {t.tag === "transfer" && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 border border-sky-500/30 font-bold shrink-0 tracking-wide" title="Transfer / Lent to Contact">
-                                  Transfer
-                                </span>
-                              )}
-                              {t.isUnwanted && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold shrink-0" title="Unwanted / Impulse Spend">
-                                  Unwanted
+                              {transferOrLoan && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 border border-sky-500/30 font-bold shrink-0 tracking-wide" title={transferLabel || "Transfer"}>
+                                  {transferLabel || "Transfer"}
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-[#71717A] flex items-center gap-1.5 truncate mt-0.5">
+                            <div className="text-[11px] text-[#71717A] truncate mt-0.5">
                               {t.note ? (
-                                <>
-                                  <span className="truncate text-[#A1A1AA]">{t.note}</span>
-                                  {t.paymentMethod && <span className="text-[#52525B]">·</span>}
-                                </>
-                              ) : null}
-                              {t.paymentMethod && (
-                                <span className="capitalize shrink-0">{t.paymentMethod}</span>
-                              )}
-                              {!t.note && !t.paymentMethod && (
+                                <span className="text-[#A1A1AA] truncate">
+                                  {(() => {
+                                    const firstLine = t.note.split("\n")[0].trim();
+                                    return firstLine.length > 30 ? `${firstLine.slice(0, 30)}...` : firstLine;
+                                  })()}
+                                </span>
+                              ) : (
                                 <span className="text-[#52525B] text-[10px] capitalize">{t.type}</span>
                               )}
                             </div>
@@ -551,18 +652,25 @@ export const TransactionsPage: React.FC = () => {
 
                         {/* Amount & Quick Actions */}
                         <div className="flex items-center gap-2.5 shrink-0">
-                          <span
-                            className={`text-xs sm:text-sm font-bold font-mono-num ${
-                              isExpense ? "text-[#F5F5F5]" : "text-emerald-400"
-                            }`}
-                          >
-                            {isExpense ? "-" : "+"}
-                            {formatMoney(t.amount, settings.currency, settings.numberFormat)}
-                          </span>
+                          {transferOrLoan ? (
+                            <span className="text-xs sm:text-sm font-bold font-mono-num text-[#A1A1AA]">
+                              {formatMoney(t.amount, settings.currency, settings.numberFormat)}
+                            </span>
+                          ) : (
+                            <span
+                              className={`text-xs sm:text-sm font-bold font-mono-num ${
+                                isExpense ? "text-[#F5F5F5]" : "text-emerald-400"
+                              }`}
+                            >
+                              {isExpense ? "-" : "+"}
+                              {formatMoney(t.amount, settings.currency, settings.numberFormat)}
+                            </span>
+                          )}
 
                           {/* Quick Actions on hover */}
                           <div className="hidden sm:flex items-center gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDuplicate(t);
@@ -573,6 +681,7 @@ export const TransactionsPage: React.FC = () => {
                               <Copy className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openAddModal(t.tag === "transfer" ? "transfer" : t.type, t);
@@ -583,6 +692,7 @@ export const TransactionsPage: React.FC = () => {
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setTransactionToDelete(t);
@@ -605,7 +715,18 @@ export const TransactionsPage: React.FC = () => {
         </div>
       )}
 
-      {/* 4. Transaction Details Modal (Opened on click) */}
+      {/* 4. Advanced Filter Drawer */}
+      <AdvancedFilterDrawer
+        isOpen={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+        filters={advancedFilters}
+        onApply={setAdvancedFilters}
+        onReset={() => setAdvancedFilters(DEFAULT_FILTER_STATE)}
+        categories={categories}
+        currencySymbol={settings.currency || "$"}
+      />
+
+      {/* 5. Transaction Details Modal (Opened on click) */}
       <TransactionDetailsModal
         transaction={selectedTransaction}
         isOpen={isDetailsModalOpen}
@@ -620,7 +741,7 @@ export const TransactionsPage: React.FC = () => {
         categories={categories}
       />
 
-      {/* 5. Delete Confirmation Modal (PC view & direct row deletion) */}
+      {/* 6. Delete Confirmation Modal (PC view & direct row deletion) */}
       <ConfirmDeleteTransactionModal
         isOpen={!!transactionToDelete}
         transaction={transactionToDelete}
@@ -636,7 +757,7 @@ export const TransactionsPage: React.FC = () => {
         numberFormat={settings.numberFormat}
       />
 
-      {/* 5. Export to CSV Pop-up Window */}
+      {/* 7. Export to CSV Pop-up Window */}
       <ExportCsvModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}

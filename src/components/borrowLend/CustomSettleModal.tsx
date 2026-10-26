@@ -38,6 +38,7 @@ export const CustomSettleModal: React.FC<CustomSettleModalProps> = ({
 
   const [amountStr, setAmountStr] = useState("");
   const [date, setDate] = useState(getToday());
+  const [paymentMethod, setPaymentMethod] = useState("upi");
   const [note, setNote] = useState("");
 
   // Determine mode: single-loan vs whole-contact settlement
@@ -74,6 +75,7 @@ export const CustomSettleModal: React.FC<CustomSettleModalProps> = ({
     if (isOpen) {
       setAmountStr(minorUnitsToInputString(totalPayable));
       setDate(getToday());
+      setPaymentMethod("upi");
       setNote("");
 
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -122,29 +124,31 @@ export const CustomSettleModal: React.FC<CustomSettleModalProps> = ({
       return;
     }
 
-    const settleNote = note.trim() || (amount === totalPayable ? "Full settlement" : "Partial settlement");
+    const settleNote = note.trim();
 
     if (isSingleLoanMode && loan) {
       // Single loan settlement
       addRepayment(loan.id, {
         amount,
         date: date || getToday(),
-        note: settleNote,
+        paymentMethod,
+        note: settleNote || undefined,
       });
 
+      const contactName = person?.name || "contact";
       if (loan.direction === "borrowed") {
-        showToast(`Settled ${formatMoney(amount, settings.currency, settings.numberFormat)} & logged to Activity Expenses!`);
+        showToast(`Paid back ${formatMoney(amount, settings.currency, settings.numberFormat)} to ${contactName} & logged to Activity Expenses!`);
       } else {
-        showToast(`Received ${formatMoney(amount, settings.currency, settings.numberFormat)} & logged to Activity Income!`);
+        showToast(`Got back ${formatMoney(amount, settings.currency, settings.numberFormat)} from ${contactName} & logged to Activity Income!`);
       }
     } else if (person) {
       // Whole contact settlement
-      settleContact(person.id, amount, date || getToday(), settleNote);
+      settleContact(person.id, amount, date || getToday(), settleNote || undefined, paymentMethod);
 
       if (!isLent) {
-        showToast(`Settled debt with ${person.name} & logged ${formatMoney(amount, settings.currency, settings.numberFormat)} to Activity Expenses!`);
+        showToast(`Paid back ${formatMoney(amount, settings.currency, settings.numberFormat)} to ${person.name} & logged to Activity Expenses!`);
       } else {
-        showToast(`Received settlement from ${person.name} & logged ${formatMoney(amount, settings.currency, settings.numberFormat)} to Activity Income!`);
+        showToast(`Got back ${formatMoney(amount, settings.currency, settings.numberFormat)} from ${person.name} & logged to Activity Income!`);
       }
     }
 
@@ -316,15 +320,46 @@ export const CustomSettleModal: React.FC<CustomSettleModalProps> = ({
 
             <div>
               <label className="block text-[11px] font-medium text-[#A1A1AA] mb-1">
-                Note / Reason (Optional)
+                Note / Memo (Optional)
               </label>
               <input
                 type="text"
-                placeholder="e.g. Google Pay / Cash / Bank"
+                placeholder="e.g. Lunch split, final payoff"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                className="w-full bg-[#181818] border border-[#262626] rounded-xl p-2 text-xs text-[#F5F5F5] outline-none"
+                className="w-full bg-[#181818] border border-[#262626] rounded-xl p-2 text-xs text-[#F5F5F5] outline-none focus:border-emerald-500/50 transition"
               />
+            </div>
+          </div>
+
+          {/* Payment Mode Selector */}
+          <div className="space-y-1.5 pt-0.5">
+            <label className="block text-[11px] font-medium text-[#A1A1AA]">
+              Payment Mode
+            </label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {[
+                { id: "cash", label: "Cash" },
+                { id: "upi", label: "UPI" },
+                { id: "bank", label: "Bank Transfer" },
+                { id: "other", label: "Other" },
+              ].map((mode) => {
+                const isSelected = paymentMethod === mode.id;
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    onClick={() => setPaymentMethod(mode.id)}
+                    className={`py-1.5 px-2 rounded-xl text-xs font-semibold border transition text-center cursor-pointer select-none ${
+                      isSelected
+                        ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 shadow-sm"
+                        : "bg-[#181818] border-[#262626] text-[#A1A1AA] hover:border-[#383838] hover:text-[#F5F5F5]"
+                    }`}
+                  >
+                    <span className="truncate block">{mode.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

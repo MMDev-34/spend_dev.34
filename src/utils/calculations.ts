@@ -5,32 +5,81 @@ import { getCurrentWeekDays, getToday } from "./dates";
 import { WeekStartDay } from "@/types/settings";
 
 /**
- * Calculates total spending (minor units) for a given month (YYYY-MM)
+ * Determines whether a transaction is a money transfer, money lent, money borrowed, or debt settlement.
+ * These transactions represent capital/asset transfers rather than personal consumption expenses or earned income.
+ */
+export function isTransferOrLoanTransaction(t: Transaction | undefined | null): boolean {
+  if (!t) return false;
+  if (t.type === "transfer") return true;
+  if (t.tag === "transfer") return true;
+  if (t.categoryId === "cat-transfer") return true;
+  if (typeof t.id === "string" && (t.id.startsWith("tx-loan-") || t.id.startsWith("tx-settle-"))) {
+    return true;
+  }
+  if (t.note) {
+    const lower = t.note.toLowerCase();
+    if (
+      lower.startsWith("lent to") ||
+      lower.startsWith("borrowed from") ||
+      lower.startsWith("paid back to") ||
+      lower.startsWith("got back from") ||
+      lower.startsWith("debt settlement to") ||
+      lower.startsWith("debt repayment from") ||
+      lower.startsWith("full debt settlement to") ||
+      lower.startsWith("full debt repayment from") ||
+      lower.includes("(to:") ||
+      lower.includes("(lent to:") ||
+      lower.includes("(borrowed from:")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Checks whether a transaction is a genuine expense (excluding money transfers, money lent, and loan repayments)
+ */
+export function isGenuineExpense(t: Transaction | undefined | null): boolean {
+  if (!t) return false;
+  return t.type === "expense" && !isTransferOrLoanTransaction(t);
+}
+
+/**
+ * Checks whether a transaction is genuine earned income (excluding money borrowed and debt repayments received)
+ */
+export function isGenuineIncome(t: Transaction | undefined | null): boolean {
+  if (!t) return false;
+  return t.type === "income" && !isTransferOrLoanTransaction(t);
+}
+
+/**
+ * Calculates total spending (minor units) for a given month (YYYY-MM), excluding transfers & loans
  */
 export function calculateMonthlySpending(transactions: Transaction[] = [], monthKey: string = ""): number {
   if (!Array.isArray(transactions) || !monthKey) return 0;
   return transactions
-    .filter((t) => t && t.type === "expense" && typeof t.date === "string" && t.date.startsWith(monthKey))
+    .filter((t) => isGenuineExpense(t) && typeof t.date === "string" && t.date.startsWith(monthKey))
     .reduce((sum, t) => sum + (Number.isFinite(t.amount) ? t.amount : 0), 0);
 }
 
 /**
- * Calculates total income (minor units) for a given month (YYYY-MM)
+ * Calculates total income (minor units) for a given month (YYYY-MM), excluding money borrowed & repayments
  */
 export function calculateMonthlyIncome(transactions: Transaction[] = [], monthKey: string = ""): number {
   if (!Array.isArray(transactions) || !monthKey) return 0;
   return transactions
-    .filter((t) => t && t.type === "income" && typeof t.date === "string" && t.date.startsWith(monthKey))
+    .filter((t) => isGenuineIncome(t) && typeof t.date === "string" && t.date.startsWith(monthKey))
     .reduce((sum, t) => sum + (Number.isFinite(t.amount) ? t.amount : 0), 0);
 }
 
 /**
- * Calculates spending for today (minor units)
+ * Calculates spending for today (minor units), excluding transfers & loans
  */
 export function calculateTodaySpending(transactions: Transaction[] = [], todayStr: string = getToday()): number {
   if (!Array.isArray(transactions)) return 0;
   return transactions
-    .filter((t) => t && t.type === "expense" && t.date === todayStr)
+    .filter((t) => isGenuineExpense(t) && t.date === todayStr)
     .reduce((sum, t) => sum + (Number.isFinite(t.amount) ? t.amount : 0), 0);
 }
 
@@ -60,7 +109,7 @@ export function calculateWeeklyTotals(
   const txList = Array.isArray(transactions) ? transactions : [];
 
   return weekDays.map((date) => {
-    const dayTransactions = txList.filter((t) => t && t.type === "expense" && t.date === date);
+    const dayTransactions = txList.filter((t) => isGenuineExpense(t) && t.date === date);
     const total = dayTransactions.reduce((acc, t) => acc + (Number.isFinite(t.amount) ? t.amount : 0), 0);
     const unwantedTotal = dayTransactions
       .filter((t) => t.isUnwanted)
@@ -108,7 +157,7 @@ export function calculateWeeklyTotalsForOffset(
 }
 
 /**
- * Calculates category spending totals for a given month or range
+ * Calculates category spending totals for a given month or range (excluding transfers & loans)
  */
 export interface CategoryTotal {
   categoryId: string;
@@ -129,7 +178,7 @@ export function calculateCategoryTotals(
   const catList = Array.isArray(categories) ? categories : [];
 
   const expenseTransactions = txList.filter(
-    (t) => t && t.type === "expense" && (filterFn ? filterFn(t) : true)
+    (t) => isGenuineExpense(t) && (filterFn ? filterFn(t) : true)
   );
 
   const grandTotal = expenseTransactions.reduce((sum, t) => sum + (Number.isFinite(t.amount) ? t.amount : 0), 0);
@@ -172,22 +221,22 @@ export function calculateCategoryTotals(
 }
 
 /**
- * Calculates average daily spend for a list of transactions across distinct active days
+ * Calculates average daily spend for a list of transactions across distinct active days (excluding transfers & loans)
  */
 export function calculateAverageDailySpend(transactions: Transaction[] = [], daysInPeriod: number = 1): number {
   if (!Array.isArray(transactions) || daysInPeriod <= 0) return 0;
   const total = transactions
-    .filter((t) => t && t.type === "expense")
+    .filter((t) => isGenuineExpense(t))
     .reduce((sum, t) => sum + (Number.isFinite(t.amount) ? t.amount : 0), 0);
   return Math.round(total / daysInPeriod);
 }
 
 /**
- * Finds the largest expense transaction in a set
+ * Finds the largest expense transaction in a set (excluding transfers & loans)
  */
 export function calculateLargestExpense(transactions: Transaction[] = []): Transaction | null {
   if (!Array.isArray(transactions)) return null;
-  const expenses = transactions.filter((t) => t && t.type === "expense");
+  const expenses = transactions.filter((t) => isGenuineExpense(t));
   if (expenses.length === 0) return null;
   return expenses.reduce((max, t) => (t.amount > max.amount ? t : max), expenses[0]);
 }
@@ -212,13 +261,13 @@ export function calculateSavingsRate(income: number = 0, expense: number = 0): n
 }
 
 /**
- * Calculates the number of days with zero spending within a date range
+ * Calculates the number of days with zero spending within a date range (excluding transfers & loans)
  */
 export function calculateNoSpendDays(allDatesInPeriod: string[] = [], transactions: Transaction[] = []): number {
   if (!Array.isArray(allDatesInPeriod)) return 0;
   const txList = Array.isArray(transactions) ? transactions : [];
   const spendingDates = new Set(
-    txList.filter((t) => t && t.type === "expense" && typeof t.date === "string").map((t) => t.date)
+    txList.filter((t) => isGenuineExpense(t) && typeof t.date === "string").map((t) => t.date)
   );
 
   return allDatesInPeriod.filter((d) => !spendingDates.has(d)).length;
@@ -261,7 +310,7 @@ export function calculateLoanSummaries(loans: Loan[] = []) {
 }
 
 /**
- * Calculates spending progress for a category budget based on its duration (weekly, monthly, yearly)
+ * Calculates spending progress for a category budget based on its duration (excluding transfers & loans)
  */
 export interface CategoryBudgetProgress {
   budget: import("@/types/plan").CategoryBudget;
@@ -295,16 +344,16 @@ export function calculateCategoryBudgetProgress(
 
   if (budget.duration === "weekly") {
     const weekDays = new Set(getCurrentWeekDays(referenceDate, weekStartsOn));
-    periodTransactions = txList.filter((t) => t && t.type === "expense" && weekDays.has(t.date));
+    periodTransactions = txList.filter((t) => isGenuineExpense(t) && weekDays.has(t.date));
     periodLabel = "This Week";
   } else if (budget.duration === "yearly") {
     const yearKey = (referenceDate || getToday()).slice(0, 4);
-    periodTransactions = txList.filter((t) => t && t.type === "expense" && typeof t.date === "string" && t.date.startsWith(yearKey));
+    periodTransactions = txList.filter((t) => isGenuineExpense(t) && typeof t.date === "string" && t.date.startsWith(yearKey));
     periodLabel = `Year ${yearKey}`;
   } else {
     // Monthly
     const monthKey = (referenceDate || getToday()).slice(0, 7);
-    periodTransactions = txList.filter((t) => t && t.type === "expense" && typeof t.date === "string" && t.date.startsWith(monthKey));
+    periodTransactions = txList.filter((t) => isGenuineExpense(t) && typeof t.date === "string" && t.date.startsWith(monthKey));
     periodLabel = "This Month";
   }
 

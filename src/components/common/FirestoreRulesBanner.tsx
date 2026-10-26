@@ -16,7 +16,11 @@ export const FirestoreRulesBanner: React.FC<FirestoreRulesBannerProps> = ({
   const [showCode, setShowCode] = useState(false);
 
   const projectId = (firebaseConfig as any)?.projectId || "spend-d4b10";
-  const consoleRulesUrl = `https://console.firebase.google.com/project/${projectId}/firestore/rules`;
+  const databaseId = (firebaseConfig as any)?.firestoreDatabaseId;
+  const consoleRulesUrl =
+    databaseId && databaseId !== "(default)"
+      ? `https://console.firebase.google.com/project/${projectId}/firestore/databases/${databaseId}/rules`
+      : `https://console.firebase.google.com/project/${projectId}/firestore/rules`;
 
   const handleCopyRules = async () => {
     try {

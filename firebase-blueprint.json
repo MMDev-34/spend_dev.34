@@ -228,6 +228,20 @@
           "description": "Due date in YYYY-MM-DD",
           "maxLength": 32
         },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment method used for the loan (e.g. UPI, CASH, BANK)",
+          "maxLength": 64
+        },
+        "status": {
+          "type": "string",
+          "description": "Optional status of the loan",
+          "maxLength": 64
+        },
+        "isSettled": {
+          "type": "boolean",
+          "description": "Whether the loan has been fully settled"
+        },
         "repayments": {
           "type": "array",
           "description": "List of repayments made against this loan"

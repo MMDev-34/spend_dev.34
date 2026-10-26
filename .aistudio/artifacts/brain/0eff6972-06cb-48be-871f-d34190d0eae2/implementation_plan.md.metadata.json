@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for recording transfers and lent amounts as expense transactions with a 'Transfer' tag, displaying the transfer badge in transaction lists and details, syncing with Borrow & Lend, and updating Firebase rules.",
-  "updatedAt":  "2026-10-22T05:24:30.801829820Z",
+  "summary":  "Implementation plan to exclude money transfers, money lent, money borrowed, and loan settlements from expense and income totals while retaining them in transaction history with neutral styling and a dedicated badge.",
+  "updatedAt":  "2026-10-26T17:53:30.249856490Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

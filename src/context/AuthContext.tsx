@@ -13,7 +13,13 @@ import {
   testConnection,
   syncUserProfileDocument,
 } from "@/lib/firebase";
-import { subscribeToUserCloudData, syncSettingsToCloud } from "@/lib/firebaseSync";
+import { 
+  subscribeToUserCloudData, 
+  syncSettingsToCloud,
+  syncTransactionToCloud,
+  syncPersonToCloud,
+  syncLoanToCloud
+} from "@/lib/firebaseSync";
 import { useAppStore } from "@/stores/appStore";
 import { useUIStore } from "@/stores/uiStore";
 import {
@@ -122,7 +128,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // 2. Subscribe to real-time cloud data strictly for currentUser.uid
             unsubscribeCloud = subscribeToUserCloudData(currentUser.uid, {
               onTransactionsUpdate: (cloudTxs) => {
-                useAppStore.setState({ transactions: cloudTxs });
+                const currentStore = useAppStore.getState();
+                if (cloudTxs.length > 0) {
+                  useAppStore.setState({ transactions: cloudTxs });
+                } else if (currentStore.transactions.length > 0) {
+                  // Cloud is empty for this user, but existing local transactions exist: sync them up!
+                  currentStore.transactions.forEach((tx) => {
+                    syncTransactionToCloud(tx, currentUser.uid).catch(() => {});
+                  });
+                }
                 setCloudSyncStatus("synced");
                 setLastSyncedAt(new Date());
               },
@@ -142,10 +156,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
               },
               onPeopleUpdate: (cloudPeople) => {
-                useAppStore.setState({ people: cloudPeople });
+                const currentStore = useAppStore.getState();
+                if (cloudPeople.length > 0) {
+                  useAppStore.setState({ people: cloudPeople });
+                } else if (currentStore.people.length > 0) {
+                  currentStore.people.forEach((p) => {
+                    syncPersonToCloud(p, currentUser.uid).catch(() => {});
+                  });
+                }
               },
               onLoansUpdate: (cloudLoans) => {
-                useAppStore.setState({ loans: cloudLoans });
+                const currentStore = useAppStore.getState();
+                if (cloudLoans.length > 0) {
+                  useAppStore.setState({ loans: cloudLoans });
+                } else if (currentStore.loans.length > 0) {
+                  currentStore.loans.forEach((l) => {
+                    syncLoanToCloud(l, currentUser.uid).catch(() => {});
+                  });
+                }
               },
               onBudgetsUpdate: (cloudBudgets) => {
                 useAppStore.setState({ categoryBudgets: cloudBudgets });
@@ -174,11 +202,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setCloudSyncStatus("offline");
           }
         } else {
-          // Unverified user - isolate and prevent access
-          useAppStore.getState().loadUserScope(null);
+          // If email not yet verified, still load user's scope locally
+          useAppStore.getState().loadUserScope(currentUser.uid);
         }
       } else {
-        // No authenticated user
+        // No authenticated user -> Load guest scope (preserves local transactions)
         setIsEmailVerified(false);
         setUserName("");
         useAppStore.getState().loadUserScope(null);

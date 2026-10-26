@@ -35,7 +35,7 @@ interface AppState extends SpendState {
   plannedExpenses: PlannedExpense[];
 
   // Transaction actions
-  addTransaction: (tx: Omit<Transaction, "id" | "createdAt" | "updatedAt">) => Transaction;
+  addTransaction: (tx: Omit<Transaction, "id" | "createdAt" | "updatedAt"> & { id?: string }) => Transaction;
   updateTransaction: (id: string, updates: Partial<Omit<Transaction, "id" | "createdAt">>) => void;
   deleteTransaction: (id: string) => void;
   restoreTransaction: (tx: Transaction) => void;
@@ -52,7 +52,7 @@ interface AppState extends SpendState {
   // People & Loan actions
   addPerson: (name: string) => Person;
   updatePerson: (id: string, name: string) => void;
-  deletePerson: (id: string) => boolean;
+  deletePerson: (id: string, cascadeLoans?: boolean) => boolean;
 
   addLoan: (loan: Omit<Loan, "id" | "repayments" | "createdAt" | "updatedAt">) => Loan;
   updateLoan: (id: string, updates: Partial<Omit<Loan, "id" | "repayments" | "createdAt">>) => void;
@@ -60,7 +60,7 @@ interface AppState extends SpendState {
   addRepayment: (loanId: string, repayment: Omit<Repayment, "id">) => void;
   deleteRepayment: (loanId: string, repaymentId: string) => void;
   settleLoan: (loanId: string) => void;
-  settleContact: (personId: string, amount?: number, date?: string, note?: string) => void;
+  settleContact: (personId: string, amount?: number, date?: string, note?: string, paymentMethod?: string) => void;
 
   // Category Budgets
   addCategoryBudget: (budget: Omit<CategoryBudget, "id" | "createdAt" | "updatedAt">) => CategoryBudget;
@@ -120,32 +120,19 @@ export const useAppStore = create<AppState>((set, get) => {
   return {
     ...loaded,
     currentUserId: null,
-    transactions: [],
-    people: [],
-    loans: [],
-    categoryBudgets: [],
-    recurringExpenses: [],
-    plannedExpenses: [],
+    transactions: loaded.transactions || [],
+    categories: loaded.categories && loaded.categories.length > 0 ? loaded.categories : INITIAL_STATE.categories,
+    people: loaded.people || [],
+    loans: loaded.loans || [],
+    categoryBudgets: loaded.categoryBudgets || [],
+    recurringExpenses: loaded.recurringExpenses || [],
+    plannedExpenses: loaded.plannedExpenses || [],
+    settings: loaded.settings || INITIAL_STATE.settings,
 
     loadUserScope: (userId) => {
-      if (!userId) {
-        set({
-          currentUserId: null,
-          transactions: [],
-          categories: INITIAL_STATE.categories,
-          people: [],
-          loans: [],
-          categoryBudgets: [],
-          recurringExpenses: [],
-          plannedExpenses: [],
-          settings: INITIAL_STATE.settings,
-        });
-        return;
-      }
-
       const userLoaded = storage.loadState(userId);
       set({
-        currentUserId: userId,
+        currentUserId: userId || null,
         transactions: userLoaded.transactions || [],
         categories:
           userLoaded.categories && userLoaded.categories.length > 0
@@ -166,7 +153,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const newTx: Transaction = {
         ...txData,
         isUnwanted: txData.type === "expense" ? Boolean(txData.isUnwanted) : false,
-        id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        id: txData.id || `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         createdAt: now,
         updatedAt: now,
       };
@@ -409,16 +396,33 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
-    deletePerson: (id) => {
-      const hasLoans = get().loans.some((l) => l.personId === id);
-      if (hasLoans) return false;
+    deletePerson: (id, cascadeLoans = false) => {
+      const associatedLoans = get().loans.filter((l) => l.personId === id);
+      if (associatedLoans.length > 0 && !cascadeLoans) return false;
+
+      const autoTxIds = new Set<string>();
+      if (cascadeLoans) {
+        associatedLoans.forEach((l) => {
+          l.repayments.forEach((r) => autoTxIds.add(`tx-settle-${r.id}`));
+          autoTxIds.add(`tx-loan-${l.id}`);
+        });
+      }
 
       syncAndSet((state) => ({
         people: state.people.filter((p) => p.id !== id),
+        loans: cascadeLoans ? state.loans.filter((l) => l.personId !== id) : state.loans,
+        transactions: cascadeLoans ? state.transactions.filter((t) => !autoTxIds.has(t.id)) : state.transactions,
       }));
 
       if (auth.currentUser) {
         deletePersonFromCloud(id);
+        if (cascadeLoans) {
+          associatedLoans.forEach((l) => {
+            deleteLoanFromCloud(l.id);
+            l.repayments.forEach((r) => deleteTransactionFromCloud(`tx-settle-${r.id}`).catch(() => {}));
+            deleteTransactionFromCloud(`tx-loan-${l.id}`).catch(() => {});
+          });
+        }
       }
       return true;
     },
@@ -450,6 +454,8 @@ export const useAppStore = create<AppState>((set, get) => {
     updateLoan: (id, updates) => {
       const now = new Date().toISOString();
       let updatedL: Loan | undefined;
+      let updatedTxToSync: Transaction | undefined;
+
       syncAndSet((state) => {
         const nextLoans = state.loans.map((l) => {
           if (l.id === id) {
@@ -458,20 +464,52 @@ export const useAppStore = create<AppState>((set, get) => {
           }
           return l;
         });
-        return { loans: nextLoans };
+
+        // Also sync origin transaction if amount, date, description, or paymentMethod changed
+        let nextTransactions = state.transactions;
+        const originTx = state.transactions.find((t) => t.id === `tx-loan-${id}`);
+        if (originTx) {
+          const person = state.people.find((p) => p.id === (updatedL?.personId || originTx.id));
+          const personName = person?.name || "Contact";
+          const newAmount = updates.amount !== undefined ? updates.amount : originTx.amount;
+          const newDate = updates.date !== undefined ? updates.date : originTx.date;
+          const newPaymentMethod = updates.paymentMethod !== undefined ? updates.paymentMethod.toLowerCase() : originTx.paymentMethod;
+          const newDesc = updates.description !== undefined ? updates.description : "";
+          const directionLabel = (updatedL?.direction || "borrowed") === "lent" ? "Lent to" : "Borrowed from";
+          const newNote = newDesc.trim() ? `${newDesc.trim()} (${directionLabel}: ${personName})` : `${directionLabel} ${personName}`;
+
+          updatedTxToSync = {
+            ...originTx,
+            amount: newAmount,
+            date: newDate,
+            paymentMethod: newPaymentMethod,
+            note: newNote,
+            updatedAt: now,
+          };
+          nextTransactions = state.transactions.map((t) => (t.id === originTx.id ? updatedTxToSync! : t));
+        }
+
+        return { loans: nextLoans, transactions: nextTransactions };
       });
 
-      if (auth.currentUser && updatedL) {
-        syncLoanToCloud(updatedL, auth.currentUser.uid).catch((err) => {
-          console.warn("Cloud sync deferred (Firestore permission issue):", err?.message || err);
-        });
+      if (auth.currentUser) {
+        if (updatedL) {
+          syncLoanToCloud(updatedL, auth.currentUser.uid).catch((err) => {
+            console.warn("Cloud sync deferred (Firestore permission issue):", err?.message || err);
+          });
+        }
+        if (updatedTxToSync) {
+          syncTransactionToCloud(updatedTxToSync, auth.currentUser.uid).catch(() => {});
+        }
       }
     },
 
     deleteLoan: (id) => {
+      const autoTxIds = new Set<string>();
       syncAndSet((state) => {
         const targetLoan = state.loans.find((l) => l.id === id);
-        const autoTxIds = new Set(targetLoan?.repayments.map((r) => `tx-settle-${r.id}`) || []);
+        targetLoan?.repayments.forEach((r) => autoTxIds.add(`tx-settle-${r.id}`));
+        autoTxIds.add(`tx-loan-${id}`);
         return {
           loans: state.loans.filter((l) => l.id !== id),
           transactions: state.transactions.filter((t) => !autoTxIds.has(t.id)),
@@ -480,6 +518,9 @@ export const useAppStore = create<AppState>((set, get) => {
 
       if (auth.currentUser) {
         deleteLoanFromCloud(id);
+        autoTxIds.forEach((txId) => {
+          deleteTransactionFromCloud(txId).catch(() => {});
+        });
       }
     },
 
@@ -497,59 +538,64 @@ export const useAppStore = create<AppState>((set, get) => {
         const targetLoan = state.loans.find((l) => l.id === loanId);
         let updatedTransactions = state.transactions;
 
-        if (targetLoan && targetLoan.direction === "borrowed") {
+        if (targetLoan) {
           const person = state.people.find((p) => p.id === targetLoan.personId);
           const personName = person?.name || "Contact";
-          const debtCategory =
-            state.categories.find(
-              (c) =>
-                c.type === "expense" &&
-                (c.id === "cat-bills" ||
-                  c.name.toLowerCase().includes("debt") ||
-                  c.name.toLowerCase().includes("loan") ||
-                  c.name.toLowerCase().includes("bill") ||
-                  c.id === "cat-other-expense")
-            ) ||
-            state.categories.find((c) => c.type === "expense") ||
-            state.categories[0];
+          const currentRepaid = targetLoan.repayments.reduce((acc, r) => acc + r.amount, 0);
+          const remainingBefore = Math.max(0, targetLoan.amount - currentRepaid);
+          const isFull = newRepayment.amount >= remainingBefore;
+          const resolvedPaymentMethod = (newRepayment.paymentMethod || targetLoan.paymentMethod || "upi").toLowerCase();
 
-          newExpenseTx = {
-            id: `tx-settle-${newRepayment.id}`,
-            type: "expense",
-            amount: newRepayment.amount,
-            categoryId: debtCategory ? debtCategory.id : "cat-bills",
-            date: newRepayment.date || getToday(),
-            note: `Debt settlement to ${personName}${newRepayment.note ? ` (${newRepayment.note})` : ""}`,
-            paymentMethod: "Settlement",
-            createdAt: now,
-            updatedAt: now,
+          // Structured Note generation
+          const formatMode = (m: string) => {
+            const lower = m.toLowerCase();
+            if (lower === "upi") return "UPI";
+            if (lower === "cash") return "Cash";
+            if (lower.includes("bank") || lower === "netbanking") return "Bank Transfer";
+            if (lower.includes("card")) return "Card";
+            if (lower === "other") return "Other";
+            return m.charAt(0).toUpperCase() + m.slice(1);
           };
 
-          updatedTransactions = [newExpenseTx, ...state.transactions];
-        } else if (targetLoan && targetLoan.direction === "lent") {
-          const person = state.people.find((p) => p.id === targetLoan.personId);
-          const personName = person?.name || "Contact";
-          const incomeCategory =
-            state.categories.find(
-              (c) =>
-                c.type === "income" &&
-                (c.id === "cat-other-income" ||
-                  c.name.toLowerCase().includes("debt") ||
-                  c.name.toLowerCase().includes("repayment") ||
-                  c.name.toLowerCase().includes("loan") ||
-                  c.id === "cat-salary")
-            ) ||
-            state.categories.find((c) => c.type === "income") ||
-            state.categories[0];
+          const noteLines = [
+            targetLoan.direction === "lent"
+              ? `Got Back from ${personName}`
+              : `Paid Back to ${personName}`,
+            `Type: ${isFull ? "Full settlement" : "Partial settlement"}`,
+            `Payment Mode: ${formatMode(resolvedPaymentMethod)}`,
+          ];
+
+          if (newRepayment.note) {
+            const trimmed = newRepayment.note.trim();
+            const lower = trimmed.toLowerCase();
+            if (
+              trimmed &&
+              lower !== "full settlement" &&
+              lower !== "partial settlement" &&
+              lower !== "full repayment" &&
+              lower !== "partial installment" &&
+              lower !== "settled in full" &&
+              lower !== "mutual debt offset" &&
+              !trimmed.includes("·")
+            ) {
+              noteLines.push(`Note: ${trimmed}`);
+            }
+          }
+
+          const structuredNote = noteLines.join("\n");
+
+          const transferCat = state.categories.find((c) => c.id === "cat-transfer" || c.name.toLowerCase() === "transfer");
+          const transferCatId = transferCat?.id || "cat-transfer";
 
           newExpenseTx = {
             id: `tx-settle-${newRepayment.id}`,
-            type: "income",
+            type: "transfer",
+            tag: "transfer",
             amount: newRepayment.amount,
-            categoryId: incomeCategory ? incomeCategory.id : "cat-other-income",
+            categoryId: transferCatId,
             date: newRepayment.date || getToday(),
-            note: `Debt repayment from ${personName}${newRepayment.note ? ` (${newRepayment.note})` : ""}`,
-            paymentMethod: "Settlement",
+            note: structuredNote,
+            paymentMethod: resolvedPaymentMethod,
             createdAt: now,
             updatedAt: now,
           };
@@ -630,11 +676,13 @@ export const useAppStore = create<AppState>((set, get) => {
       const remaining = Math.max(0, targetLoan.amount - currentRepaid);
       if (remaining === 0) return;
 
+      const settlementPaymentMethod = (targetLoan.paymentMethod || "upi").toLowerCase();
       const settlementRepayment: Repayment = {
         id: `rep-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         amount: remaining,
         date: getToday(),
-        note: "Settled in full",
+        paymentMethod: settlementPaymentMethod,
+        note: "Full settlement",
       };
 
       const now = new Date().toISOString();
@@ -646,61 +694,41 @@ export const useAppStore = create<AppState>((set, get) => {
         const person = state.people.find((p) => p.id === targetLoan.personId);
         const personName = person?.name || "Contact";
 
-        if (targetLoan.direction === "borrowed") {
-          const debtCategory =
-            state.categories.find(
-              (c) =>
-                c.type === "expense" &&
-                (c.id === "cat-bills" ||
-                  c.name.toLowerCase().includes("debt") ||
-                  c.name.toLowerCase().includes("loan") ||
-                  c.name.toLowerCase().includes("bill") ||
-                  c.id === "cat-other-expense")
-            ) ||
-            state.categories.find((c) => c.type === "expense") ||
-            state.categories[0];
+        const formatMode = (m: string) => {
+          const lower = m.toLowerCase();
+          if (lower === "upi") return "UPI";
+          if (lower === "cash") return "Cash";
+          if (lower.includes("bank") || lower === "netbanking") return "Bank Transfer";
+          if (lower.includes("card")) return "Card";
+          if (lower === "other") return "Other";
+          return m.charAt(0).toUpperCase() + m.slice(1);
+        };
 
-          newExpenseTx = {
-            id: `tx-settle-${settlementRepayment.id}`,
-            type: "expense",
-            amount: settlementRepayment.amount,
-            categoryId: debtCategory ? debtCategory.id : "cat-bills",
-            date: settlementRepayment.date,
-            note: `Full debt settlement to ${personName}`,
-            paymentMethod: "Settlement",
-            createdAt: now,
-            updatedAt: now,
-          };
+        const structuredNote = [
+          targetLoan.direction === "lent"
+            ? `Got Back from ${personName}`
+            : `Paid Back to ${personName}`,
+          "Type: Full settlement",
+          `Payment Mode: ${formatMode(settlementPaymentMethod)}`,
+        ].join("\n");
 
-          updatedTransactions = [newExpenseTx, ...state.transactions];
-        } else if (targetLoan.direction === "lent") {
-          const incomeCategory =
-            state.categories.find(
-              (c) =>
-                c.type === "income" &&
-                (c.id === "cat-other-income" ||
-                  c.name.toLowerCase().includes("debt") ||
-                  c.name.toLowerCase().includes("repayment") ||
-                  c.name.toLowerCase().includes("loan") ||
-                  c.id === "cat-salary")
-            ) ||
-            state.categories.find((c) => c.type === "income") ||
-            state.categories[0];
+        const transferCat = state.categories.find((c) => c.id === "cat-transfer" || c.name.toLowerCase() === "transfer");
+        const transferCatId = transferCat?.id || "cat-transfer";
 
-          newExpenseTx = {
-            id: `tx-settle-${settlementRepayment.id}`,
-            type: "income",
-            amount: settlementRepayment.amount,
-            categoryId: incomeCategory ? incomeCategory.id : "cat-other-income",
-            date: settlementRepayment.date,
-            note: `Full debt repayment from ${personName}`,
-            paymentMethod: "Settlement",
-            createdAt: now,
-            updatedAt: now,
-          };
+        newExpenseTx = {
+          id: `tx-settle-${settlementRepayment.id}`,
+          type: "transfer",
+          tag: "transfer",
+          amount: settlementRepayment.amount,
+          categoryId: transferCatId,
+          date: settlementRepayment.date,
+          note: structuredNote,
+          paymentMethod: settlementPaymentMethod,
+          createdAt: now,
+          updatedAt: now,
+        };
 
-          updatedTransactions = [newExpenseTx, ...state.transactions];
-        }
+        updatedTransactions = [newExpenseTx, ...state.transactions];
 
         const nextLoans = state.loans.map((l) => {
           if (l.id === loanId) {
@@ -726,7 +754,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
-    settleContact: (personId, customAmount, customDate, customNote) => {
+    settleContact: (personId, customAmount, customDate, customNote, paymentMethod) => {
       const state = get();
       const contactLoans = state.loans.filter((l) => l.personId === personId);
       if (contactLoans.length === 0) return;
@@ -837,7 +865,8 @@ export const useAppStore = create<AppState>((set, get) => {
         get().addRepayment(loan.id, {
           amount: paymentForThisLoan,
           date: settleDate,
-          note: customNote || (paymentForThisLoan === loanRemaining ? "Settled in full" : "Partial settlement"),
+          paymentMethod: paymentMethod || "upi",
+          note: customNote || undefined,
         });
       }
     },

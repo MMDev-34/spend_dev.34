@@ -20,6 +20,7 @@ import {
   Target, 
   HandCoins 
 } from "lucide-react";
+import { isRealExpense, isRealIncome, isTransferOrLoan } from "@/utils/transactionClassification";
 
 interface DayInspectorModalProps {
   isOpen: boolean;
@@ -90,11 +91,11 @@ export const DayInspectorModal: React.FC<DayInspectorModalProps> = ({
   const monthStrKey = dateStr.slice(0, 7);
 
   const totalSpent = dayTransactions
-    .filter((t) => t.type === "expense")
+    .filter((t) => isRealExpense(t))
     .reduce((sum, t) => sum + t.amount, 0);
 
   const totalIncome = dayTransactions
-    .filter((t) => t.type === "income")
+    .filter((t) => isRealIncome(t))
     .reduce((sum, t) => sum + t.amount, 0);
 
   const totalPendingDue = [
@@ -375,7 +376,8 @@ export const DayInspectorModal: React.FC<DayInspectorModalProps> = ({
                   <div className="divide-y divide-[#262626] rounded-xl bg-[#1C1C1C] border border-[#262626] overflow-hidden text-xs">
                     {dayTransactions.map((t) => {
                       const cat = categoryMap.get(t.categoryId);
-                      const isExpense = t.type === "expense";
+                      const transferOrLoan = isTransferOrLoan(t);
+                      const isExpense = isRealExpense(t);
                       return (
                         <div
                           key={t.id}
@@ -395,8 +397,11 @@ export const DayInspectorModal: React.FC<DayInspectorModalProps> = ({
                             </div>
                           </div>
 
-                          <span className={`font-mono-num font-bold text-xs ${isExpense ? "text-[#F5F5F5]" : "text-emerald-400"}`}>
-                            {isExpense ? "-" : "+"}{formatMoney(t.amount, settings.currency, settings.numberFormat)}
+                          <span className={`font-mono-num font-bold text-xs ${
+                            transferOrLoan ? "text-[#A1A1AA]" : isExpense ? "text-[#F5F5F5]" : "text-emerald-400"
+                          }`}>
+                            {transferOrLoan ? "" : isExpense ? "-" : "+"}
+                            {formatMoney(t.amount, settings.currency, settings.numberFormat)}
                           </span>
                         </div>
                       );

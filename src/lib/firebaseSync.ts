@@ -9,7 +9,7 @@ import {
   getDocs,
   Unsubscribe,
 } from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "./firebase";
+import { db, handleFirestoreError, logFirestoreError, OperationType } from "./firebase";
 import { Transaction } from "@/types/transaction";
 import { Category } from "@/types/category";
 import { Person } from "@/types/person";
@@ -64,12 +64,12 @@ export function subscribeToUserCloudData(
         listeners.onTransactionsUpdate(txs);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, txPath);
+        logFirestoreError(error, OperationType.GET, txPath);
       }
     );
     unsubs.push(unsubTx);
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, txPath);
+    logFirestoreError(error, OperationType.GET, txPath);
   }
 
   // 2. Categories
@@ -94,12 +94,12 @@ export function subscribeToUserCloudData(
         listeners.onCategoriesUpdate(cats);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, catPath);
+        logFirestoreError(error, OperationType.GET, catPath);
       }
     );
     unsubs.push(unsubCat);
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, catPath);
+    logFirestoreError(error, OperationType.GET, catPath);
   }
 
   // 3. People
@@ -120,12 +120,12 @@ export function subscribeToUserCloudData(
         listeners.onPeopleUpdate(people);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, peoplePath);
+        logFirestoreError(error, OperationType.GET, peoplePath);
       }
     );
     unsubs.push(unsubPeople);
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, peoplePath);
+    logFirestoreError(error, OperationType.GET, peoplePath);
   }
 
   // 4. Loans
@@ -145,6 +145,7 @@ export function subscribeToUserCloudData(
             description: data.description || data.note || "",
             date: data.date || data.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
             dueDate: data.dueDate,
+            paymentMethod: data.paymentMethod,
             repayments: data.repayments || [],
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
@@ -153,12 +154,12 @@ export function subscribeToUserCloudData(
         listeners.onLoansUpdate(loans);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, loansPath);
+        logFirestoreError(error, OperationType.GET, loansPath);
       }
     );
     unsubs.push(unsubLoans);
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, loansPath);
+    logFirestoreError(error, OperationType.GET, loansPath);
   }
 
   // 5. Category Budgets
@@ -182,12 +183,12 @@ export function subscribeToUserCloudData(
         listeners.onBudgetsUpdate(budgets);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, budgetsPath);
+        logFirestoreError(error, OperationType.GET, budgetsPath);
       }
     );
     unsubs.push(unsubBudgets);
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, budgetsPath);
+    logFirestoreError(error, OperationType.GET, budgetsPath);
   }
 
   // 6. Recurring Expenses
@@ -216,12 +217,12 @@ export function subscribeToUserCloudData(
         listeners.onRecurringUpdate(recurring);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, recurringPath);
+        logFirestoreError(error, OperationType.GET, recurringPath);
       }
     );
     unsubs.push(unsubRecurring);
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, recurringPath);
+    logFirestoreError(error, OperationType.GET, recurringPath);
   }
 
   // 7. Planned Expenses
@@ -251,12 +252,12 @@ export function subscribeToUserCloudData(
         listeners.onPlannedUpdate(planned);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, plannedPath);
+        logFirestoreError(error, OperationType.GET, plannedPath);
       }
     );
     unsubs.push(unsubPlanned);
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, plannedPath);
+    logFirestoreError(error, OperationType.GET, plannedPath);
   }
 
   // 8. User Settings
@@ -289,12 +290,12 @@ export function subscribeToUserCloudData(
         }
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, settingsPath);
+        logFirestoreError(error, OperationType.GET, settingsPath);
       }
     );
     unsubs.push(unsubSettings);
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, settingsPath);
+    logFirestoreError(error, OperationType.GET, settingsPath);
   }
 
   return () => {
@@ -339,7 +340,7 @@ export async function syncTransactionToCloud(tx: Transaction, userId: string) {
     });
     await setDoc(doc(db, "transactions", tx.id), payload);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    logFirestoreError(error, OperationType.WRITE, path);
   }
 }
 
@@ -348,7 +349,7 @@ export async function deleteTransactionFromCloud(id: string) {
   try {
     await deleteDoc(doc(db, "transactions", id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    logFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
@@ -361,7 +362,7 @@ export async function syncCategoryToCloud(cat: Category, userId: string) {
     });
     await setDoc(doc(db, "categories", cat.id), payload);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    logFirestoreError(error, OperationType.WRITE, path);
   }
 }
 
@@ -370,7 +371,7 @@ export async function deleteCategoryFromCloud(id: string) {
   try {
     await deleteDoc(doc(db, "categories", id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    logFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
@@ -383,7 +384,7 @@ export async function syncPersonToCloud(person: Person, userId: string) {
     });
     await setDoc(doc(db, "people", person.id), payload);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    logFirestoreError(error, OperationType.WRITE, path);
   }
 }
 
@@ -392,7 +393,7 @@ export async function deletePersonFromCloud(id: string) {
   try {
     await deleteDoc(doc(db, "people", id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    logFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
@@ -405,7 +406,7 @@ export async function syncLoanToCloud(loan: Loan, userId: string) {
     });
     await setDoc(doc(db, "loans", loan.id), payload);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    logFirestoreError(error, OperationType.WRITE, path);
   }
 }
 
@@ -414,7 +415,7 @@ export async function deleteLoanFromCloud(id: string) {
   try {
     await deleteDoc(doc(db, "loans", id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    logFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
@@ -427,7 +428,7 @@ export async function syncBudgetToCloud(budget: CategoryBudget, userId: string) 
     });
     await setDoc(doc(db, "categoryBudgets", budget.id), payload);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    logFirestoreError(error, OperationType.WRITE, path);
   }
 }
 
@@ -436,7 +437,7 @@ export async function deleteBudgetFromCloud(id: string) {
   try {
     await deleteDoc(doc(db, "categoryBudgets", id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    logFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
@@ -449,7 +450,7 @@ export async function syncRecurringToCloud(recurring: RecurringExpense, userId: 
     });
     await setDoc(doc(db, "recurringExpenses", recurring.id), payload);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    logFirestoreError(error, OperationType.WRITE, path);
   }
 }
 
@@ -458,7 +459,7 @@ export async function deleteRecurringFromCloud(id: string) {
   try {
     await deleteDoc(doc(db, "recurringExpenses", id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    logFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
@@ -471,7 +472,7 @@ export async function syncPlannedToCloud(planned: PlannedExpense, userId: string
     });
     await setDoc(doc(db, "plannedExpenses", planned.id), payload);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    logFirestoreError(error, OperationType.WRITE, path);
   }
 }
 
@@ -480,7 +481,7 @@ export async function deletePlannedFromCloud(id: string) {
   try {
     await deleteDoc(doc(db, "plannedExpenses", id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    logFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
@@ -521,10 +522,11 @@ export async function syncSettingsToCloud(settings: Settings, userId: string) {
         await setDoc(doc(db, "userSettings", userId), fallbackPayload);
         return;
       } catch (fallbackErr) {
-        handleFirestoreError(fallbackErr, OperationType.WRITE, path);
+        logFirestoreError(fallbackErr, OperationType.WRITE, path);
+        return;
       }
     }
-    handleFirestoreError(error, OperationType.WRITE, path);
+    logFirestoreError(error, OperationType.WRITE, path);
   }
 }
 

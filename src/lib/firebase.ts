@@ -14,6 +14,7 @@ import {
   User as FirebaseUser,
 } from "firebase/auth";
 import { getFirestore, doc, getDocFromServer, setDoc, getDoc } from "firebase/firestore";
+import { getDatabase } from "firebase/database";
 import firebaseConfig from "../../firebase-applet-config.json";
 import { useUIStore } from "@/stores/uiStore";
 
@@ -32,9 +33,18 @@ export const resolvedFirebaseConfig = {
 export const app = initializeApp(resolvedFirebaseConfig);
 
 // Database initialization
-export const db = (resolvedFirebaseConfig as any).firestoreDatabaseId
-  ? getFirestore(app, (resolvedFirebaseConfig as any).firestoreDatabaseId)
-  : getFirestore(app);
+// If firestoreDatabaseId is set and is NOT "(default)", pass it, otherwise connect to default database in spend-d4b10
+export const db =
+  (resolvedFirebaseConfig as any).firestoreDatabaseId &&
+  (resolvedFirebaseConfig as any).firestoreDatabaseId !== "(default)" &&
+  !(resolvedFirebaseConfig as any).firestoreDatabaseId.startsWith("ai-studio-")
+    ? getFirestore(app, (resolvedFirebaseConfig as any).firestoreDatabaseId)
+    : getFirestore(app);
+
+// Realtime Database connection for spend-d4b10
+export const rtdb = (resolvedFirebaseConfig as any).databaseURL
+  ? getDatabase(app, (resolvedFirebaseConfig as any).databaseURL)
+  : getDatabase(app);
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
@@ -66,9 +76,14 @@ export interface FirestoreErrorInfo {
   };
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+export function logFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+): FirestoreErrorInfo {
   const errMsg = error instanceof Error ? error.message : String(error);
-  const isPermissionIssue = errMsg.toLowerCase().includes("permission") || (error as any)?.code === "permission-denied";
+  const isPermissionIssue =
+    errMsg.toLowerCase().includes("permission") || (error as any)?.code === "permission-denied";
   if (isPermissionIssue) {
     try {
       useUIStore.getState().setFirestorePermissionError(true);
@@ -93,6 +108,11 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path,
   };
   console.warn("Firestore Error: ", JSON.stringify(errInfo));
+  return errInfo;
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo = logFirestoreError(error, operationType, path);
   throw new Error(JSON.stringify(errInfo));
 }
 

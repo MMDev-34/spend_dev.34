@@ -16,7 +16,8 @@ import {
   Banknote,
   MoreHorizontal,
   Calendar as CalendarIcon,
-  User
+  User,
+  AlertTriangle
 } from "lucide-react";
 
 interface DateOption {
@@ -57,6 +58,7 @@ export const AddPaymentModal: React.FC = () => {
   const [transferTo, setTransferTo] = useState<string>("");
   const [showPersonSuggestions, setShowPersonSuggestions] = useState<boolean>(false);
   const [paymentAccount, setPaymentAccount] = useState<string>("upi");
+  const [isUnwanted, setIsUnwanted] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
 
   // Compact dropdown states
@@ -136,6 +138,7 @@ export const AddPaymentModal: React.FC = () => {
           setTransferTo("");
         }
         setPaymentAccount(normalizePaymentAccount(prefill.paymentMethod || settings.defaultPaymentMethod));
+        setIsUnwanted(Boolean(prefill.isUnwanted));
       } else {
         setType(targetType);
         setAmountStr("");
@@ -143,6 +146,7 @@ export const AddPaymentModal: React.FC = () => {
         setDescription("");
         setTransferTo("");
         setPaymentAccount(normalizePaymentAccount(settings.defaultPaymentMethod));
+        setIsUnwanted(false);
 
         if (targetType === "transfer") {
           setSelectedCategoryId(transferCat?.id || "cat-transfer");
@@ -357,7 +361,7 @@ export const AddPaymentModal: React.FC = () => {
 
       if (prefill && prefill.id) {
         updateTransaction(prefill.id, {
-          type: "expense",
+          type: "transfer",
           tag: "transfer",
           amount: minorUnits,
           categoryId: transferCatId,
@@ -368,7 +372,7 @@ export const AddPaymentModal: React.FC = () => {
         showToast(`Transfer updated & logged as lent to ${targetPerson.name}`);
       } else {
         addTransaction({
-          type: "expense",
+          type: "transfer",
           tag: "transfer",
           amount: minorUnits,
           categoryId: transferCatId,
@@ -388,6 +392,7 @@ export const AddPaymentModal: React.FC = () => {
           date,
           note: description.trim() || undefined,
           paymentMethod: paymentAccount,
+          isUnwanted: type === "expense" ? isUnwanted : false,
         });
         showToast("Transaction updated");
       } else {
@@ -399,6 +404,7 @@ export const AddPaymentModal: React.FC = () => {
           date,
           note: description.trim() || undefined,
           paymentMethod: paymentAccount,
+          isUnwanted: type === "expense" ? isUnwanted : false,
         });
         showToast(type === "expense" ? "Expense added" : "Income added");
       }
@@ -907,6 +913,33 @@ export const AddPaymentModal: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* 5b. Unwanted / Impulse Spend Flag (Expenses Only) */}
+          {type === "expense" && (
+            <button
+              type="button"
+              onClick={() => setIsUnwanted(!isUnwanted)}
+              className={`w-full p-2.5 rounded-xl border transition flex items-center justify-between cursor-pointer select-none ${
+                isUnwanted
+                  ? "bg-amber-500/10 border-amber-500/35 text-amber-300 shadow-sm"
+                  : "bg-[#181818] border-[#242424] text-[#A1A1AA] hover:border-[#333333]"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <AlertTriangle className={`w-4 h-4 ${isUnwanted ? "text-amber-400" : "text-[#71717A]"}`} />
+                <span className="text-xs font-semibold">Flag as Unwanted / Impulse Spend</span>
+              </div>
+              <div
+                className={`w-5 h-5 rounded-md flex items-center justify-center border transition ${
+                  isUnwanted
+                    ? "bg-amber-500 text-black border-amber-400"
+                    : "bg-[#121212] border-[#333333] text-transparent"
+                }`}
+              >
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+              </div>
+            </button>
+          )}
 
           {/* 6. Save Button */}
           <div className="pt-2">

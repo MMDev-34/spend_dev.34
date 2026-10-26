@@ -1,85 +1,57 @@
-# Implementation Plan - Record Transfers / Lent Amounts as Expenses with 'Transfer' Tag
+# Implementation Plan: Exclude Transfers, Loans & Settlements from Expenses & Income
 
-Treat transfers and money lent to others as **expenses** with a dedicated **Transfer** tag. This ensures they are automatically counted in total spending and deducted from balance while preserving the visual identity and ledger tracking of a transfer.
-
-## User Requirements & Clarifications Confirmed
-1. **Expenses Calculation**: Transfers and lent amounts are categorized as expenses so they are counted in total spending, expense charts, and deducted from account balance.
-2. **Transfer Tag**: The underlying transaction record will have `type: "expense"` and `tag: "transfer"`.
-3. **Visual Badge**: Display a distinct "Transfer" badge/tag next to the category in transaction lists, feeds, and detail modals.
-4. **Borrow & Lend Integration**: When adding a "Lent" record from the Borrow & Lend page (`/borrow-lend`), also automatically record an expense transaction with `tag: "transfer"`.
-5. **Firebase Rules & Blueprint**: Update `firestore.rules` and `firebase-blueprint.json` to allow the optional `tag` field on transactions and deploy them.
+Ensure that money transfers, money lent, money borrowed, and debt settlements/repayments are excluded from all expense and income calculations throughout Spend (Overview summaries, charts, day totals, calendar inspector), while remaining fully visible in the transaction history with a neutral visual presentation and a distinct badge.
 
 ---
 
-## Proposed Changes
+## 1. Classification Engine (`src/utils/transactionClassification.ts`)
 
-### 1. `src/types/transaction.ts`
-- Add optional `tag?: string` to the `Transaction` interface (e.g., `"transfer"`).
-
-### 2. `src/components/transaction/AddPaymentModal.tsx`
-- In `handleSave`:
-  - When `type === "transfer"`:
-    - Save the transaction with `type: "expense"` and `tag: "transfer"`.
-    - Note will store the note text plus `(To: ContactName)`.
-    - Automatically create the active `Loan` with `direction: "lent"` in `appStore` (so it displays in the Lent tab of Borrow & Lend).
-    - Confirmation toast: `"Transfer recorded as expense & added to Lent"`.
-
-### 3. `src/pages/BorrowLend/BorrowLendPage.tsx`
-- In `handleCreateLoan`:
-  - When `direction === "lent"`:
-    - In addition to creating the loan, automatically call `addTransaction` with:
-      - `type: "expense"`
-      - `tag: "transfer"`
-      - `amount: amount`
-      - `categoryId: defaultExpenseCategory`
-      - `date: startDate || getToday()`
-      - `note: "Lent to [ContactName]"`
-      - `paymentMethod: "upi"`
-
-### 4. Transaction Displays (`TransactionsPage.tsx` & `TransactionDetailsModal.tsx`)
-- In `TransactionsPage.tsx`:
-  - Render a styled sky-blue `<span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 font-bold shrink-0">Transfer</span>` badge beside the category name for transactions with `t.tag === "transfer"`.
-  - When editing a transaction with `tag === "transfer"`, open `AddPaymentModal` with the "Transfer" tab pre-selected.
-- In `TransactionDetailsModal.tsx`:
-  - Render the "Transfer" badge alongside the "Expense" badge in the hero header.
-
-### 5. Firebase Blueprint & Security Rules
-- In `firebase-blueprint.json`:
-  - Add `tag` property (`type: "string"`, `maxLength: 64`) to `Transaction` entity.
-- In `firestore.rules`:
-  - Include `'tag'` in `isValidTransaction` allowed keys: `data.keys().hasOnly([... 'tag', ...])`.
-  - Add validation: `(!('tag' in data) || (data.tag is string && data.tag.size() <= 64))`.
-- Deploy the updated rules to Firebase via `deploy_firebase`.
-
-### 6. Transfer Category Configuration in 'New Transaction' Modal
-- Add canonical default system category `cat-transfer` ("Transfer", icon `🔄`, color `#0EA5E9`, type `"both"`, `isDefault: true`) to `DEFAULT_CATEGORIES` in `src/lib/constants.ts`.
-- Ensure `storage.loadState` automatically populates the `cat-transfer` default category if not present in cached storage.
-- In `src/components/transaction/AddPaymentModal.tsx`:
-  - When opening in or switching to the "Transfer" tab, immediately lock and pre-select the category to "Transfer" (`cat-transfer`).
-  - In the Category dropdown selector, clearly display the category as "Transfer" (with `🔄` icon, name "Transfer", and a "Set to Transfer" indicator badge), disabling unintended category changes.
-  - When switching back to "Expense" or "Income", gracefully switch back to standard valid categories for that type.
-  - On submit, ensure transactions logged under the Transfer tab save with the Transfer category ID.
-- In `src/pages/BorrowLend/BorrowLendPage.tsx`:
-  - When auto-logging an expense transaction for a lent loan, assign the Transfer category.
+Create a centralized helper `isTransferOrLoan(tx: Transaction): boolean` and helper getters:
+- Returns `true` if:
+  - `tx.type === "transfer"`
+  - `tx.tag === "transfer" || tx.tag === "loan" || tx.tag === "settlement"`
+  - `tx.categoryId === "cat-transfer"`
+  - `tx.id.startsWith("tx-loan-") || tx.id.startsWith("tx-settle-")`
+  - Transaction note or paymentMethod indicates a loan/settlement (`Got Back from`, `Paid Back to`, `Lent to`, `Borrowed from`, `Debt settlement`)
+- `isRealExpense(tx)`: `tx.type === "expense" && !isTransferOrLoan(tx)`
+- `isRealIncome(tx)`: `tx.type === "income" && !isTransferOrLoan(tx)`
 
 ---
 
-## Verification Plan
+## 2. Transaction Generation Updates
 
-### Automated Verification
-1. Run `lint_applet` to confirm zero TypeScript compilation or linting errors. (Passed)
-2. Run `compile_applet` to ensure full Vite build success. (Passed)
-3. Deploy updated Firestore rules and verify success. (Passed)
+1. **`src/components/borrowLend/NewTransactionView.tsx`**:
+   - When recording money lent or money borrowed, create transactions with `type: "transfer"`, `tag: "transfer"`, and `categoryId: "cat-transfer"`.
+2. **`src/components/transaction/AddPaymentModal.tsx`**:
+   - When recording a transfer from the Transfer tab, assign `type: "transfer"`, `tag: "transfer"`, and `categoryId: "cat-transfer"`.
+3. **`src/stores/appStore.ts`**:
+   - In `addRepayment` and `settleLoan`, set the generated Activity transaction's type to `"transfer"` and tag to `"transfer"`.
 
-### Manual / Browser Verification
-1. **New Transaction modal -> Transfer tab**:
-   - Verify category field is set to "Transfer" with icon `🔄` and "Set to Transfer" indicator.
-   - Enter amount and recipient name ("Alex").
-   - Save transfer.
-   - Verify transfer transaction is saved under category "Transfer" with the sky-blue "Transfer" badge.
-   - Verify the lent loan appears in the Lent tab of Borrow & Lend.
-2. **Tab Switching**:
-   - Open modal: defaults to Expense with standard expense category (e.g. Food).
-   - Click "Transfer": category immediately sets to "Transfer".
-   - Click "Income": category switches to an income category (e.g. Salary).
-   - Click "Transfer": category sets back to "Transfer".
+---
+
+## 3. Financial Totals & Chart Updates
+
+1. **`src/pages/Overview/OverviewPage.tsx`**:
+   - `totalExpense`: computed strictly over `isRealExpense(tx)`.
+   - `totalIncome`: computed strictly over `isRealIncome(tx)`.
+   - `CategoryDonutSection`: excludes transfer category and loan transactions.
+   - `CashFlowTrendChart` & `FiveMonthExpenseChart`: reflect real expenses and real income only.
+   - `Average Daily Expense` and `Net Headroom`: accurately exclude transfers and loans.
+2. **`src/pages/Transactions/TransactionsPage.tsx`**:
+   - Timeline day group headers: `totalExpense` and `totalIncome` compute only non-transfer items.
+   - Filter tabs:
+     - `Expenses`: shows only real expenses.
+     - `Income`: shows only real income.
+     - `Transfers` (or All): shows transfers, loans, and settlements.
+   - Transaction Cards:
+     - For transfers and loans: display neutral text color (without `+` or `-` prefix) and display a clear `Transfer` or `Loan` badge.
+3. **`src/components/calendar/DayInspectorModal.tsx`**:
+   - Day totals (`totalSpent` and `totalIncome`) exclude transfers and loans.
+
+---
+
+## 4. Verification & Testing
+
+- Verify that creating a transfer, lending money, borrowing money, or recording a settlement leaves the Overview "Total Expenses" and "Total Income" untouched.
+- Verify that the transaction record still appears in the Activity/Transactions list with a neutral amount and a `Transfer` badge.
+- Run `lint_applet` and `compile_applet` to ensure type safety and build success.
